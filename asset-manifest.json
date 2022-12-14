@@ -1,15 +1,15 @@
 {
   "files": {
     "main.css": "/sprite-chem/static/css/main.dc712b87.css",
-    "main.js": "/sprite-chem/static/js/main.e6d080f5.js",
+    "main.js": "/sprite-chem/static/js/main.6b2ec361.js",
     "static/js/787.b2d2a072.chunk.js": "/sprite-chem/static/js/787.b2d2a072.chunk.js",
     "index.html": "/sprite-chem/index.html",
     "main.dc712b87.css.map": "/sprite-chem/static/css/main.dc712b87.css.map",
-    "main.e6d080f5.js.map": "/sprite-chem/static/js/main.e6d080f5.js.map",
+    "main.6b2ec361.js.map": "/sprite-chem/static/js/main.6b2ec361.js.map",
     "787.b2d2a072.chunk.js.map": "/sprite-chem/static/js/787.b2d2a072.chunk.js.map"
   },
   "entrypoints": [
     "static/css/main.dc712b87.css",
-    "static/js/main.e6d080f5.js"
+    "static/js/main.6b2ec361.js"
   ]
 }
