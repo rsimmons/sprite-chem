@@ -82,12 +82,17 @@ function App() {
     // eslint-disable-next-line
   }, []);
 
-  const pointFromEvent = (e: React.MouseEvent): Vec2 => {
+  const pointRelativeToCanvas = (clientX: number, clientY: number): Vec2 => {
+    invariant(canvasRef.current);
     const pixelScale = pixelScaleRef.current;
-    const rect = e.currentTarget.getBoundingClientRect();
-    const x = pixelScale*(e.clientX - rect.left);
-    const y = pixelScale*(e.clientY - rect.top);
+    const rect = canvasRef.current.getBoundingClientRect();
+    const x = pixelScale*(clientX - rect.left);
+    const y = pixelScale*(clientY - rect.top);
     return {x, y};
+  }
+
+  const pointFromMouseEvent = (e: React.MouseEvent | MouseEvent): Vec2 => {
+    return pointRelativeToCanvas(e.clientX, e.clientY);
   };
 
   const onCanvasMouseDown = (e: React.MouseEvent) => {
@@ -95,34 +100,80 @@ function App() {
 
     updateAppState(stateRef.current, {
       type: 'mouseDown',
-      pos: pointFromEvent(e),
+      pos: pointFromMouseEvent(e),
     });
   };
 
-  const onCanvasMouseUp = (e: React.MouseEvent) => {
+  const onWindowMouseUp = (e: MouseEvent) => {
     e.preventDefault();
 
     updateAppState(stateRef.current, {
       type: 'mouseUp',
-      pos: pointFromEvent(e),
+      pos: pointFromMouseEvent(e),
     });
   };
 
-  const onCanvasMouseMove = (e: React.MouseEvent) => {
+  const onWindowMouseMove = (e: MouseEvent) => {
     e.preventDefault();
 
     updateAppState(stateRef.current, {
       type: 'mouseMove',
-      pos: pointFromEvent(e),
+      pos: pointFromMouseEvent(e),
     });
   };
 
-  const onWheel = (e: React.WheelEvent) => {
+  useEffect(() => {
+    window.addEventListener('mouseup', onWindowMouseUp, false);
+    window.addEventListener('mousemove', onWindowMouseMove, false);
+
+    return () => {
+      window.removeEventListener('mousemove', onWindowMouseUp, false);
+      window.removeEventListener('mousemove', onWindowMouseMove, false);
+    };
+  });
+
+  const onCanvasWheel = (e: React.WheelEvent) => {
     updateAppState(stateRef.current, {
       type: 'wheel',
-      pos: pointFromEvent(e),
+      pos: pointFromMouseEvent(e),
       deltaY: e.deltaY,
     });
+  };
+
+  const onCanvasTouchStart = (e: React.TouchEvent) => {
+    for (let i = 0; i < e.changedTouches.length; i++) {
+      const touch = e.changedTouches[i];
+
+      updateAppState(stateRef.current, {
+        type: 'touchStart',
+        id: touch.identifier,
+        pos: pointRelativeToCanvas(touch.clientX, touch.clientY),
+      });
+    }
+  };
+
+  const onCanvasTouchMove = (e: React.TouchEvent) => {
+    for (let i = 0; i < e.changedTouches.length; i++) {
+      const touch = e.changedTouches[i];
+
+      updateAppState(stateRef.current, {
+        type: 'touchMove',
+        id: touch.identifier,
+        pos: pointRelativeToCanvas(touch.clientX, touch.clientY),
+      });
+    }
+  };
+
+  const onCanvasTouchEnd = (e: React.TouchEvent) => {
+    for (let i = 0; i < e.changedTouches.length; i++) {
+      const touch = e.changedTouches[i];
+
+      updateAppState(stateRef.current, {
+        type: 'touchEnd',
+        id: touch.identifier,
+        pos: pointRelativeToCanvas(touch.clientX, touch.clientY),
+      });
+    }
   };
 
   return (
@@ -131,9 +182,10 @@ function App() {
         id="main-canvas"
         ref={canvasRef}
         onMouseDown={onCanvasMouseDown}
-        onMouseUp={onCanvasMouseUp}
-        onMouseMove={onCanvasMouseMove}
-        onWheel={onWheel}
+        onWheel={onCanvasWheel}
+        onTouchStart={onCanvasTouchStart}
+        onTouchMove={onCanvasTouchMove}
+        onTouchEnd={onCanvasTouchEnd}
       ></canvas>
     </div>
   );
