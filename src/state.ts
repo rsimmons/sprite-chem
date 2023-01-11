@@ -3,42 +3,17 @@ import { pointInRect, Rect, Vec2, vec2add, vec2dist, vec2scale, vec2sub } from "
 
 import witch from './sprites/witch.png';
 import monster from './sprites/monster.png';
-
-interface Object {
-  id: number;
-  kind: Kind;
-  pos: Vec2;
-  size: number; // length of longest axis in world-space
-}
-
-interface WorldState {
-  worldTime: number;
-  nextObjectId: number;
-  objects: Map<number, Object>; // TODO: convert to SoA
-}
-
-interface Sprite {
-  readonly url: string;
-  data:
-    {
-      readonly type: 'loading',
-    } | {
-      readonly type: 'loaded',
-      readonly bitmap: ImageBitmap,
-      // the following are if the image is scaled such that max dim is 1
-      readonly scaledWidth: number;
-      readonly scaledHeight: number;
-    };
-}
-
-interface Kind {
-  id: number;
-  sprite: Sprite;
-}
+import { addObject, WorldState } from "./world";
+import { Kind } from "./kind";
+import { Sprite, spriteFromURL } from "./sprite";
+import { AVAILABLE_RULE_SCHEMAS, ParsedRule, ParsedRuleItem, PARSED_SCHEMAS, RuleArg, RuleInstance, RuleSchema } from "./rule";
 
 interface CodeState {
   readonly nextKindId: number;
   readonly kinds: ReadonlyMap<number, Kind>;
+
+  readonly nextRuleId: number;
+  readonly rules: ReadonlyMap<number, RuleInstance>;
 }
 
 interface PanelRects {
@@ -124,18 +99,6 @@ function addKind(codeState: CodeState, sprite: Sprite): CodeState {
     nextKindId: codeState.nextKindId+1,
     kinds: newKinds,
   };
-}
-
-function addObject(state: AppState, kind: Kind, pos: Vec2, size: number) {
-  const ws = state.worldState;
-  const oid = ws.nextObjectId;
-  ws.objects.set(oid, {
-    id: oid,
-    kind,
-    pos,
-    size,
-  });
-  ws.nextObjectId++;
 }
 
 function getKindInitialSize(kind: Kind) {
@@ -226,6 +189,8 @@ export function initAppState(): AppState {
     codeState: {
       nextKindId: 1,
       kinds: new Map(),
+      nextRuleId: 1,
+      rules: new Map(),
     },
     worldState: {
       worldTime: 0,
@@ -238,29 +203,6 @@ export function initAppState(): AppState {
   addKindFromSpriteURL(state, monster);
 
   return state;
-}
-
-// returns sprite immediately but underlying bitmap is loaded async
-function spriteFromURL(url: string): Sprite {
-  const sprite: Sprite = {
-    url,
-    data: {type: 'loading'},
-  };
-
-  (async () => {
-    const resp = await fetch(url);
-    const blob = await resp.blob();
-    const bitmap = await createImageBitmap(blob);
-    const invMaxDim = 1/Math.max(bitmap.width, bitmap.height)
-    sprite.data = {
-      type: 'loaded',
-      bitmap,
-      scaledWidth: invMaxDim*bitmap.width,
-      scaledHeight: invMaxDim*bitmap.height,
-    };
-  })();
-
-  return sprite;
 }
 
 async function addKindFromSpriteURL(state: AppState, url: string) {
@@ -429,12 +371,13 @@ export function updateAppState(state: AppState, action: Action): void {
             const objects = state.worldState.objects;
             const objId = hit.entity.objId;
             const obj = objects.get(objId)!;
+            const kindId = obj.kind.id;
             objects.delete(objId);
 
             uist.dragStates.push({
               type: 'fromViewportObj',
               inputId,
-              kindId: obj.kind.id,
+              kindId,
               pos: action.pos,
               size: hit.entity.size,
               spriteOffset: vec2scale(vec2sub(action.pos, hit.entity.pos), 1/hit.entity.size),
@@ -462,7 +405,7 @@ export function updateAppState(state: AppState, action: Action): void {
             const kind = state.codeState.kinds.get(ds.kindId)!;
             const size = getKindInitialSize(kind);
             const worldPos = vec2sub(applyXform(xforms.canvasToWorld, ds.pos), vec2scale(ds.spriteOffset, size));
-            addObject(state, kind, worldPos, size);
+            addObject(state.worldState, kind, worldPos, size);
           }
           uist.dragStates = uist.dragStates.filter(s => (s !== ds));
           break;
@@ -556,12 +499,109 @@ function drawSprite(ctx: CanvasRenderingContext2D, sprite: Sprite, pos: Vec2, si
   }
 }
 
+type RuleLayoutItem =
+  {
+    readonly type: 'text';
+    readonly x: number;
+    readonly y: number;
+  } | {
+    readonly type: 'kindParam';
+    readonly x: number;
+    readonly y: number;
+    readonly size: number;
+  };
+
+interface RuleLayout {
+  readonly items: ReadonlyArray<RuleLayoutItem>;
+  readonly width: number;
+  readonly height: number;
+}
+
+// we assume ctx.textBaseline = 'top'
+function layoutRule(ctx: CanvasRenderingContext2D, ruleSchema: RuleSchema, parsed: ParsedRule, args: ReadonlyArray<RuleArg | undefined>): RuleLayout {
+  const resultItems: Array<RuleLayoutItem> = [];
+  const MIN_LINE_HEIGHT = 20; // this should be based on measuring font, but hardcode for now
+  const KIND_ARG_SIZE = 50;
+
+  for (const line of parsed.lines) {
+
+  }
+}
+
+// we assume ctx.textBaseline = 'top'
+function renderRule(ctx: CanvasRenderingContext2D, ruleSchema: RuleSchema, parsed: ReadonlyArray<ParsedRuleItem>, pos: Vec2, args: ReadonlyArray<RuleArg | undefined>): number {
+  const HPAD = 20;
+  const VPAD = 15;
+  const HSPACE = 15;
+  const VSPACE = 15;
+  const KIND_ARG_SIZE = 50;
+  const LINE_HEIGHT = KIND_ARG_SIZE;
+
+  let xoff = HPAD;
+  let yoff = VPAD;
+  let lineWidth = 0;
+  let xidx = 0;
+  let boxWidth = 0;
+  for (const item of parsed) {
+    switch (item.type) {
+      case 'text': {
+        if (xidx > 0) {
+          xoff += HSPACE;
+        }
+        const meas = ctx.measureText(item.text);
+        const height = meas.fontBoundingBoxDescent;
+        ctx.fillText(item.text, pos.x+xoff, pos.y+yoff+0.5*(LINE_HEIGHT-height));
+        xoff += meas.width;
+        lineWidth = xoff;
+        xidx++;
+        break;
+      }
+
+      case 'param': {
+        if (xidx > 0) {
+          xoff += HSPACE;
+        }
+        ctx.strokeRect(pos.x+xoff, pos.y+yoff, KIND_ARG_SIZE, KIND_ARG_SIZE);
+        xoff += KIND_ARG_SIZE;
+        lineWidth = xoff;
+        xidx++;
+        break;
+      }
+
+      case 'break': {
+        lineWidth += HPAD;
+        invariant(lineWidth > 0);
+        boxWidth = Math.max(boxWidth, lineWidth);
+
+        xoff = HPAD;
+        yoff += LINE_HEIGHT + VSPACE;
+        lineWidth = 0;
+        xidx = 0;
+        break;
+      }
+    }
+  }
+
+  lineWidth += HPAD;
+  invariant(lineWidth > 0);
+  boxWidth = Math.max(boxWidth, lineWidth);
+
+  const boxHeight = yoff + LINE_HEIGHT + VPAD;
+
+  ctx.strokeRect(pos.x, pos.y, boxWidth, boxHeight);
+
+  return boxHeight;
+}
+
 export function renderAppState(state: AppState, canvas: HTMLCanvasElement) {
   const canvasWidth = canvas.width;
   const canvasHeight = canvas.height;
 
   const ctx = canvas.getContext("2d");
   invariant(ctx);
+
+  ctx.textBaseline = 'top';
+  ctx.font = '32px sans-serif';
 
   ctx.clearRect(0, 0, canvasWidth, canvasHeight);
 
@@ -593,6 +633,23 @@ export function renderAppState(state: AppState, canvas: HTMLCanvasElement) {
   ctx.stroke();
 
   const newHitTargets: Array<HitTarget> = [];
+
+  /**
+   * RULE SCHEMAS
+   */
+  const RULE_SCHEMA_SPACING = 20;
+  const RULE_SCHEMA_TOP_MARGIN = 20;
+  const RULE_SCHEMA_LEFT_MARGIN = 20;
+  let y = RULE_SCHEMA_TOP_MARGIN;
+  for (const [schemaId, schema] of AVAILABLE_RULE_SCHEMAS.entries()) {
+    const pos = {
+      x: RULE_SCHEMA_LEFT_MARGIN,
+      y,
+    };
+    const args = schema.params.map(p => undefined);
+    y += renderRule(ctx, schema, PARSED_SCHEMAS.get(schemaId)!, pos, args);
+    y += RULE_SCHEMA_SPACING;
+  }
 
   /**
    * KIND PALETTE
