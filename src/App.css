@@ -3,11 +3,17 @@
   width: 100%;
   height: 100%;
   display: flex;
+  font-size: 12px;
 }
 
 .App-rule-palette {
   flex: 1;
   border-right: 1px solid #ccc;
+  display: flex;
+  flex-direction: column;
+  padding: 0.5em;
+  gap: 1em;
+  overflow: hidden;
 }
 
 .App-rule-palette-rest {
@@ -61,4 +67,34 @@
   height: 100%;
   pointer-events: none;
   touch-action: none;
+}
+
+.Rule {
+  padding: 0.5em 1em;
+  border: 1px solid #ccc;
+  border-radius: 1em;
+  box-shadow: 2px 2px 5px 2px rgba(0, 0, 0, 0.25);
+  width: max-content;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5em;
+  background: white;
+}
+
+.Rule-line {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 0.5em;
+}
+
+.Rule-param-empty {
+  color: #ccc;
+  width: 3em;
+  height: 3em;
+  box-shadow: inset 0 0 5px rgba(0, 0, 0, 0.25);
+  border-radius: 1em;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }

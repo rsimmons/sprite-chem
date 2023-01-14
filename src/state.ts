@@ -18,25 +18,31 @@ export type TouchPos = Vec2;
 type DragState =
   {
     // when kind-sprite has started being dragged, but has not yet "detached"
-    readonly type: 'fromKindPalette',
-    readonly touchId: TouchID,
+    readonly type: 'fromKindPalette';
+    readonly touchId: TouchID;
     readonly kindId: number;
     readonly startPos: TouchPos;
     pos: TouchPos;
     readonly size: number;
     readonly offset: Vec2; // relative to [-0.5, -0.5] to [0.5, 0.5] enclosing square
   } | {
-    readonly type: 'placingKind',
-    readonly touchId: TouchID,
+    readonly type: 'placingKind';
+    readonly touchId: TouchID;
     readonly kindId: number;
     pos: TouchPos;
     size: number;
     readonly offset: Vec2; // relative to [-0.5, -0.5] to [0.5, 0.5] enclosing square
     sizingToWorldview: boolean; // sprite has gone over worldview, so matching its final size
   } | {
-    readonly type: 'fromWorldviewBg',
-    readonly touchId: TouchID,
+    readonly type: 'fromWorldviewBg';
+    readonly touchId: TouchID;
     prevPos: Vec2;
+  } | {
+    readonly type: 'placingRuleSchema';
+    readonly touchId: TouchID;
+    readonly schemaId: string;
+    pos: TouchPos;
+    readonly offset: Vec2; // screen pixels relative to top-left corner
   };
 
 interface WorldviewHitTarget {
@@ -119,6 +125,12 @@ export type Action =
     readonly type: 'touchStartCanvas';
     readonly touchId: TouchID;
     readonly pos: TouchPos;
+  } | {
+    readonly type: 'touchStartRulePalette';
+    readonly touchId: TouchID;
+    readonly pos: TouchPos;
+    readonly schemaId: string;
+    readonly offset: Vec2;
   };
 
 export function initAppState(): AppState {
@@ -336,6 +348,11 @@ export function updateAppState(state: AppState, action: Action): void {
           ds.prevPos = action.pos;
           break;
         }
+
+        case 'placingRuleSchema': {
+          ds.pos = action.pos;
+          break;
+        }
       }
 
       break;
@@ -365,6 +382,11 @@ export function updateAppState(state: AppState, action: Action): void {
         }
 
         case 'fromWorldviewBg':
+          removeDragState(ds);
+          break;
+
+        case 'placingRuleSchema':
+          // TODO: add to code rules
           removeDragState(ds);
           break;
       }
@@ -424,6 +446,17 @@ export function updateAppState(state: AppState, action: Action): void {
       }
       break;
     }
+
+    case 'touchStartRulePalette': {
+      uist.dragStates.push({
+        type: 'placingRuleSchema',
+        touchId: action.touchId,
+        schemaId: action.schemaId,
+        pos: action.pos,
+        offset: action.offset,
+      });
+      break;
+    }
   }
 }
 
@@ -473,84 +506,6 @@ interface RuleLayout {
   readonly height: number;
 }
 
-/*
-// we assume ctx.textBaseline = 'top'
-function layoutRule(ctx: CanvasRenderingContext2D, ruleSchema: RuleSchema, parsed: ParsedRule, args: ReadonlyArray<RuleArg | undefined>): RuleLayout {
-  const resultItems: Array<RuleLayoutItem> = [];
-  const MIN_LINE_HEIGHT = 20; // this should be based on measuring font, but hardcode for now
-  const KIND_ARG_SIZE = 50;
-
-  for (const line of parsed.lines) {
-
-  }
-}
-
-// we assume ctx.textBaseline = 'top'
-function renderRule(ctx: CanvasRenderingContext2D, ruleSchema: RuleSchema, parsed: ReadonlyArray<ParsedRuleItem>, pos: Vec2, args: ReadonlyArray<RuleArg | undefined>): number {
-  const HPAD = 20;
-  const VPAD = 15;
-  const HSPACE = 15;
-  const VSPACE = 15;
-  const KIND_ARG_SIZE = 50;
-  const LINE_HEIGHT = KIND_ARG_SIZE;
-
-  let xoff = HPAD;
-  let yoff = VPAD;
-  let lineWidth = 0;
-  let xidx = 0;
-  let boxWidth = 0;
-  for (const item of parsed) {
-    switch (item.type) {
-      case 'text': {
-        if (xidx > 0) {
-          xoff += HSPACE;
-        }
-        const meas = ctx.measureText(item.text);
-        const height = meas.fontBoundingBoxDescent;
-        ctx.fillText(item.text, pos.x+xoff, pos.y+yoff+0.5*(LINE_HEIGHT-height));
-        xoff += meas.width;
-        lineWidth = xoff;
-        xidx++;
-        break;
-      }
-
-      case 'param': {
-        if (xidx > 0) {
-          xoff += HSPACE;
-        }
-        ctx.strokeRect(pos.x+xoff, pos.y+yoff, KIND_ARG_SIZE, KIND_ARG_SIZE);
-        xoff += KIND_ARG_SIZE;
-        lineWidth = xoff;
-        xidx++;
-        break;
-      }
-
-      case 'break': {
-        lineWidth += HPAD;
-        invariant(lineWidth > 0);
-        boxWidth = Math.max(boxWidth, lineWidth);
-
-        xoff = HPAD;
-        yoff += LINE_HEIGHT + VSPACE;
-        lineWidth = 0;
-        xidx = 0;
-        break;
-      }
-    }
-  }
-
-  lineWidth += HPAD;
-  invariant(lineWidth > 0);
-  boxWidth = Math.max(boxWidth, lineWidth);
-
-  const boxHeight = yoff + LINE_HEIGHT + VPAD;
-
-  ctx.strokeRect(pos.x, pos.y, boxWidth, boxHeight);
-
-  return boxHeight;
-}
-*/
-
 export function renderAppState(state: AppState, canvas: HTMLCanvasElement) {
   const canvasWidth = canvas.width;
   const canvasHeight = canvas.height;
@@ -559,25 +514,6 @@ export function renderAppState(state: AppState, canvas: HTMLCanvasElement) {
   invariant(ctx);
 
   ctx.clearRect(0, 0, canvasWidth, canvasHeight);
-
-  /**
-   * RULE SCHEMAS
-   */
-  /*
-  const RULE_SCHEMA_SPACING = 20;
-  const RULE_SCHEMA_TOP_MARGIN = 20;
-  const RULE_SCHEMA_LEFT_MARGIN = 20;
-  let y = RULE_SCHEMA_TOP_MARGIN;
-  for (const [schemaId, schema] of AVAILABLE_RULE_SCHEMAS.entries()) {
-    const pos = {
-      x: RULE_SCHEMA_LEFT_MARGIN,
-      y,
-    };
-    const args = schema.params.map(p => undefined);
-    y += renderRule(ctx, schema, PARSED_SCHEMAS.get(schemaId)!, pos, args);
-    y += RULE_SCHEMA_SPACING;
-  }
-  */
 
   const newHitTargets: Array<WorldviewHitTarget> = [];
 

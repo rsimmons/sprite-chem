@@ -3,10 +3,44 @@ import React, { useEffect, useRef } from 'react';
 import { invariant } from './util';
 import { initAppState, renderAppState, updateAppState, AppState, TouchPos, Action } from './state';
 import { useEffectfulReducer } from './useEffectfulReducer';
+import { Vec2, vec2scale, vec2sub } from './vec';
 import './App.css';
-import { STXform, Vec2, vec2scale, vec2sub } from './vec';
+import { AVAILABLE_RULE_SCHEMAS, PARSED_SCHEMAS, RuleSchema } from './rule';
 
-function App() {
+const Rule: React.FC<{
+  schemaId: string,
+  schema: RuleSchema,
+  onMouseDown: React.MouseEventHandler<HTMLElement>,
+  onTouchStart: React.TouchEventHandler<HTMLElement>,
+}> = ({schemaId, schema, onMouseDown, onTouchStart}) => {
+  const parsed = PARSED_SCHEMAS.get(schemaId)!;
+
+  return (
+    <div
+      className="Rule"
+      onMouseDown={onMouseDown}
+      onTouchStart={onTouchStart}
+    >
+      {parsed.lines.map((line, lineIdx) => {
+        return (
+          <div key={lineIdx} className="Rule-line">
+            {line.map((item, itemIdx) => {
+              switch (item.type) {
+                case 'text':
+                  return <div key={itemIdx}>{item.text}</div>;
+
+                case 'param':
+                  return <div key={itemIdx} className="Rule-param-empty">{item.label}</div>;
+              }
+            })}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+const App: React.FC = () => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   const pixelScaleRef = useRef(1);
@@ -165,6 +199,41 @@ function App() {
     }
   };
 
+  const handleRulePaletteMouseDown = (e: React.MouseEvent, schemaId: string) => {
+    e.preventDefault();
+
+    const rect = e.currentTarget.getBoundingClientRect();
+
+    dispatch({
+      type: 'touchStartRulePalette',
+      touchId: 'mouse',
+      pos: getTouchPos(e),
+      schemaId,
+      offset: {
+        x: (e.clientX - rect.left),
+        y: (e.clientY - rect.top),
+      },
+    });
+  };
+  const handleRulePaletteTouchStart = (e: React.TouchEvent, schemaId: string) => {
+    for (let i = 0; i < e.changedTouches.length; i++) {
+      const touch = e.changedTouches[i];
+
+      const rect = e.currentTarget.getBoundingClientRect();
+
+      dispatch({
+        type: 'touchStartRulePalette',
+        touchId: touch.identifier,
+        pos: getTouchPos(touch),
+        schemaId,
+        offset: {
+          x: (touch.clientX - rect.left),
+          y: (touch.clientY - rect.top),
+        },
+      });
+    }
+  };
+
   const onWindowMouseMove = (e: MouseEvent) => {
     e.preventDefault();
 
@@ -233,7 +302,17 @@ function App() {
 
   return (
     <div className="App">
-      <div className="App-rule-palette" />
+      <div className="App-rule-palette">
+        {[...AVAILABLE_RULE_SCHEMAS.entries()].map(([schemaId, schema]) => {
+          return <Rule
+            key={schemaId}
+            schemaId={schemaId}
+            schema={schema}
+            onMouseDown={e => handleRulePaletteMouseDown(e, schemaId)}
+            onTouchStart={e => handleRulePaletteTouchStart(e, schemaId)}
+          />
+        })}
+      </div>
       <div className="App-rule-palette-rest">
         <div className="App-kind-palette-rest">
           <div className="App-rules" />
@@ -272,6 +351,27 @@ function App() {
                 maxHeight: `${ds.size}px`,
                 transform: 'translate(-50%, -50%)',
               }} />
+            }
+
+            case 'placingRuleSchema': {
+              const schema = AVAILABLE_RULE_SCHEMAS.get(ds.schemaId)!;
+              return (
+                <div
+                  key={ds.schemaId}
+                  style={{
+                    position: 'absolute',
+                    left: ds.pos.x - ds.offset.x,
+                    top: ds.pos.y - ds.offset.y,
+                  }}
+                >
+                  <Rule
+                    schemaId={ds.schemaId}
+                    schema={schema}
+                    onMouseDown={e => handleRulePaletteMouseDown(e, ds.schemaId)}
+                    onTouchStart={e => handleRulePaletteTouchStart(e, ds.schemaId)}
+                  />
+                </div>
+              );
             }
           }
           return null;
