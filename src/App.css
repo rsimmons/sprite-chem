@@ -1,10 +1,64 @@
 .App {
   position: absolute;
-  height: 100%;
   width: 100%;
+  height: 100%;
+  display: flex;
 }
 
-#main-canvas {
+.App-rule-palette {
+  flex: 1;
+  border-right: 1px solid #ccc;
+}
+
+.App-rule-palette-rest {
+  flex: 3;
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  flex-direction: column;
+}
+
+.App-kind-palette-rest {
+  flex: 7;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+}
+
+.App-rules {
+  flex: 1;
+  border-right: 1px solid #ccc;
+}
+
+.App-worldview-container {
+  flex: 2;
+  overflow: hidden;
+}
+
+.App-worldview-canvas {
+  display: block;
   touch-action: none;
   user-select: none;
+}
+
+.App-kind-palette {
+  flex: 0;
+  border-top: 1px solid #ccc;
+  display: flex;
+  align-items: center;
+  padding: 20px;
+  gap: 20px;
+}
+
+.App-kind-palette > * {
+  max-width: 100px;
+  max-height: 100px;
+}
+
+.App-drags {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  touch-action: none;
 }

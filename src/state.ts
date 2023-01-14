@@ -1,5 +1,5 @@
-import { invariant } from "./util";
-import { pointInRect, Rect, Vec2, vec2add, vec2dist, vec2scale, vec2sub } from "./vec";
+import { invariant, nextSeqNum } from "./util";
+import { applyInvSTXform, applySTXform, pointInRect, Rect, STXform, Vec2, vec2add, vec2dist, vec2lerp, vec2scale, vec2sub } from "./vec";
 
 import witch from './sprites/witch.png';
 import monster from './sprites/monster.png';
@@ -9,74 +9,55 @@ import { Sprite, spriteFromURL } from "./sprite";
 import { AVAILABLE_RULE_SCHEMAS, ParsedRule, ParsedRuleItem, PARSED_SCHEMAS, RuleArg, RuleInstance, RuleSchema } from "./rule";
 
 interface CodeState {
-  readonly nextKindId: number;
   readonly kinds: ReadonlyMap<number, Kind>;
-
-  readonly nextRuleId: number;
   readonly rules: ReadonlyMap<number, RuleInstance>;
 }
 
-interface PanelRects {
-  rulePalette: Rect;
-  kindPalette: Rect;
-  viewport: Rect;
-}
+export type TouchPos = Vec2;
 
 type DragState =
   {
-    type: 'fromKindPalette',
-    inputId: 'mouse' | number,
-    kindId: number;
-    startPos: Vec2;
-    pos: Vec2;
-    size: number;
-    spriteOffset: Vec2; // relative to [-0.5, -0.5] to [0.5, 0.5] enclosing square
-    detached: boolean;
-    sizingToViewport: boolean; // sprite has gone over viewport, so matching its final size
+    // when kind-sprite has started being dragged, but has not yet "detached"
+    readonly type: 'fromKindPalette',
+    readonly touchId: TouchID,
+    readonly kindId: number;
+    readonly startPos: TouchPos;
+    pos: TouchPos;
+    readonly size: number;
+    readonly offset: Vec2; // relative to [-0.5, -0.5] to [0.5, 0.5] enclosing square
   } | {
-    type: 'fromViewportBg',
-    inputId: 'mouse' | number,
+    readonly type: 'placingKind',
+    readonly touchId: TouchID,
+    readonly kindId: number;
+    pos: TouchPos;
+    size: number;
+    readonly offset: Vec2; // relative to [-0.5, -0.5] to [0.5, 0.5] enclosing square
+    sizingToWorldview: boolean; // sprite has gone over worldview, so matching its final size
+  } | {
+    readonly type: 'fromWorldviewBg',
+    readonly touchId: TouchID,
     prevPos: Vec2;
-  } | {
-    type: 'fromViewportObj',
-    inputId: 'mouse' | number,
-    kindId: number;
-    pos: Vec2;
-    size: number;
-    spriteOffset: Vec2; // relative to [-0.5, -0.5] to [0.5, 0.5] enclosing square
   };
 
-type HitEntity =
-  {
-    type: 'paletteKind';
-    kindId: number;
-    pos: Vec2;
-    size: number;
-  } | {
-    type: 'viewportBg';
-  } | {
-    type: 'viewportObj';
-    objId: number;
-    pos: Vec2;
-    size: number;
-  };
-
-interface HitTarget {
-  rect: Rect;
-  entity: HitEntity;
+interface WorldviewHitTarget {
+  readonly rect: Rect;
+  readonly objId: number;
 }
 
-interface ViewportState {
-  center: Vec2; // world-coordinates point that is centered in viewport
-  fitRadius: number; // radius of world-space circle to fit in viewport
+interface WorldviewState {
+  center: Vec2; // world-coordinates point that is centered in worldview
+  fitRadius: number; // radius of world-space circle to fit in worldview
 }
 
 interface UIState {
-  canvasDims: Vec2;
-  panelRects: PanelRects;
+  canvasParams: {
+    width: number;
+    height: number;
+    canvasScreenXform: STXform;
+  };
   dragStates: Array<DragState>;
-  hitTargets: Array<HitTarget>;
-  viewportState: ViewportState;
+  canvasHitTargets: Array<WorldviewHitTarget>;
+  worldviewState: WorldviewState;
 }
 
 export interface AppState {
@@ -87,7 +68,7 @@ export interface AppState {
 }
 
 function addKind(codeState: CodeState, sprite: Sprite): CodeState {
-  const id = codeState.nextKindId;
+  const id = nextSeqNum();
   const newKinds = new Map(codeState.kinds);
   newKinds.set(id, {
     id,
@@ -96,7 +77,6 @@ function addKind(codeState: CodeState, sprite: Sprite): CodeState {
 
   return {
     ...codeState,
-    nextKindId: codeState.nextKindId+1,
     kinds: newKinds,
   };
 }
@@ -105,91 +85,65 @@ function getKindInitialSize(kind: Kind) {
   return 1;
 }
 
+export type TouchID = number | 'mouse';
+
 export type Action =
   {
     readonly type: 'advanceTime';
     readonly dt: number;
   } | {
-    readonly type: 'setCanvasDims';
+    readonly type: 'setCanvasParams';
     readonly width: number;
     readonly height: number;
-  } | {
-    readonly type: 'mouseDown';
-    readonly pos: Vec2;
-  } | {
-    readonly type: 'mouseUp';
-    readonly pos: Vec2;
-  } | {
-    readonly type: 'mouseMove';
-    readonly pos: Vec2;
+    readonly canvasScreenXform: STXform;
   } | {
     readonly type: 'wheel';
-    readonly pos: Vec2;
+    readonly pos: TouchPos;
     readonly deltaY: number;
   } | {
-    readonly type: 'touchStart';
-    readonly id: number;
-    readonly pos: Vec2;
-  } | {
     readonly type: 'touchMove';
-    readonly id: number;
-    readonly pos: Vec2;
+    readonly touchId: TouchID;
+    readonly pos: TouchPos;
   } | {
     readonly type: 'touchEnd';
-    readonly id: number;
-    readonly pos: Vec2;
+    readonly touchId: TouchID;
+    readonly pos: TouchPos;
+  } | {
+    readonly type: 'touchStartKindPalette';
+    readonly touchId: TouchID;
+    readonly pos: TouchPos;
+    readonly kindId: number;
+    readonly size: number;
+    readonly offset: Vec2;
+  } | {
+    readonly type: 'touchStartCanvas';
+    readonly touchId: TouchID;
+    readonly pos: TouchPos;
   };
-
-function computePanelRects(canvasDims: Vec2): PanelRects {
-  const rulePaletteRight = Math.round(0.25*canvasDims.x);
-  const rulesRight = Math.round(0.5*canvasDims.x);
-  const viewportBottom = Math.round(0.875*canvasDims.y);
-
-  return {
-    rulePalette: {
-      left: 0,
-      top: 0,
-      width: rulePaletteRight,
-      height: canvasDims.y,
-    },
-    kindPalette: {
-      left: rulePaletteRight,
-      top: viewportBottom,
-      width: canvasDims.x - rulePaletteRight,
-      height: canvasDims.y - viewportBottom,
-    },
-    viewport: {
-      left: rulesRight,
-      top: 0,
-      width: canvasDims.x - rulesRight,
-      height: viewportBottom,
-    },
-  }
-}
 
 export function initAppState(): AppState {
-  const canvasDims: Vec2 = {
-    x: 1600,
-    y: 900,
-  };
-
-
   const state: AppState = {
     appTime: 0,
     uiState: {
-      canvasDims,
-      panelRects: computePanelRects(canvasDims),
+      canvasParams: {
+        // all placeholder
+        width: 1600,
+        height: 900,
+        canvasScreenXform: {
+          s: 1,
+          tx: 0,
+          ty: 0,
+        },
+      },
       dragStates: [],
-      hitTargets: [],
-      viewportState: {
+      canvasHitTargets: [],
+      worldviewState: {
         center: {x: 0, y: 0},
         fitRadius: 5,
       },
     },
     codeState: {
-      nextKindId: 1,
       kinds: new Map(),
-      nextRuleId: 1,
       rules: new Map(),
     },
     worldState: {
@@ -210,7 +164,7 @@ async function addKindFromSpriteURL(state: AppState, url: string) {
   state.codeState = addKind(state.codeState, sprite);
 }
 
-function hitTest(p: Vec2, hitTargets: Array<HitTarget>): HitTarget | undefined {
+function canvasHitTest(p: Vec2, hitTargets: Array<WorldviewHitTarget>): WorldviewHitTarget | undefined {
   for (let i = hitTargets.length-1; i >= 0; i--) {
     const ht = hitTargets[i];
     if (pointInRect(p, ht.rect)) {
@@ -221,82 +175,57 @@ function hitTest(p: Vec2, hitTargets: Array<HitTarget>): HitTarget | undefined {
   return undefined;
 }
 
-// scale before translate
-interface NoRotXform {
-  s: number;
-  tx: number;
-  ty: number;
-}
+function getWorldCanvasXform(uiState: UIState): STXform {
+  const canvasWidth = uiState.canvasParams.width;
+  const canvasHeight = uiState.canvasParams.height;
+  const canvasPerWorld = Math.min(canvasWidth, canvasHeight) / (2*uiState.worldviewState.fitRadius);
+  const center = uiState.worldviewState.center;
 
-function applyXform(xform: NoRotXform, p: Vec2): Vec2 {
   return {
-    x: xform.s*p.x + xform.tx,
-    y: xform.s*p.y + xform.ty,
-  };
-}
-
-interface CanvasWorldXforms {
-  worldToCanvas: NoRotXform;
-  canvasToWorld: NoRotXform;
-}
-
-function getCanvasWorldXforms(uiState: UIState): CanvasWorldXforms {
-  const viewportRect = uiState.panelRects.viewport;
-  const canvasPerWorld = Math.min(viewportRect.width, viewportRect.height) / (2*uiState.viewportState.fitRadius);
-  const center = uiState.viewportState.center;
-
-  const worldToCanvas: NoRotXform = {
     s: canvasPerWorld,
-    tx: viewportRect.left + 0.5*viewportRect.width - canvasPerWorld*center.x,
-    ty: viewportRect.top + 0.5*viewportRect.height - canvasPerWorld*center.y,
-  };
-
-  const worldPerCanvas = 1.0/canvasPerWorld;
-  const canvasToWorld: NoRotXform = {
-    s: worldPerCanvas,
-    tx: -worldPerCanvas*worldToCanvas.tx,
-    ty: -worldPerCanvas*worldToCanvas.ty,
-  };
-
-  return {
-    worldToCanvas,
-    canvasToWorld,
+    tx: 0.5*canvasWidth - canvasPerWorld*center.x,
+    ty: 0.5*canvasHeight - canvasPerWorld*center.y,
   };
 }
 
 export function updateAppState(state: AppState, action: Action): void {
-  const findMatchingDragState = (action: Action): DragState | undefined => {
-    const uist = state.uiState;
-
-    if ((action.type === 'mouseMove') || (action.type === 'mouseUp')) {
-      const mouseDragStates = uist.dragStates.filter(s => (s.inputId === 'mouse'));
-      if (mouseDragStates.length === 1) {
-        return mouseDragStates[0];
-      } else {
-        invariant(mouseDragStates.length === 0);
-        return undefined;
-      }
-    } else if ((action.type === 'touchMove') || (action.type === 'touchEnd')) {
-      const matchDragStates = uist.dragStates.filter(s => (s.inputId === action.id));
-      invariant(matchDragStates.length === 1, 'must have exactly 1 matching touch drag state');
+  const findMatchingDragState = (touchId: TouchID): DragState | undefined => {
+    const matchDragStates = state.uiState.dragStates.filter(s => (s.touchId === touchId));
+    if (matchDragStates.length === 1) {
       return matchDragStates[0];
     } else {
-      invariant(false);
+      invariant(matchDragStates.length === 0);
+      return undefined;
     }
-  }
+  };
+
+  const removeDragState = (ds: DragState) => {
+    uist.dragStates = uist.dragStates.filter(s => (s !== ds));
+  };
+
+  const touchPosInsideCanvas = (uiState: UIState, pos: TouchPos): boolean => {
+    const canvasPos = applyInvSTXform(uiState.canvasParams.canvasScreenXform, pos);
+    return (
+      (canvasPos.x >= 0) &&
+      (canvasPos.x < uiState.canvasParams.width) &&
+      (canvasPos.y >= 0) &&
+      (canvasPos.y <= uiState.canvasParams.height)
+    );
+  };
+
+  const uist = state.uiState;
 
   switch (action.type) {
     case 'advanceTime': {
       state.appTime += action.dt;
 
-      const uist = state.uiState;
       for (const ds of uist.dragStates) {
         switch (ds.type) {
-          case 'fromKindPalette': {
-            if (ds.sizingToViewport) {
-              const xforms = getCanvasWorldXforms(uist);
+          case 'placingKind': {
+            if (ds.sizingToWorldview) {
+              const worldCanvasXform = getWorldCanvasXform(uist);
               const kind = state.codeState.kinds.get(ds.kindId)!;
-              const targetSize = xforms.worldToCanvas.s*getKindInitialSize(kind);
+              const targetSize = worldCanvasXform.s*uist.canvasParams.canvasScreenXform.s*getKindInitialSize(kind);
               if (ds.size !== targetSize) {
                 const RESCALE_RATE = 5;
                 const rescaleAmt = RESCALE_RATE*action.dt;
@@ -318,153 +247,180 @@ export function updateAppState(state: AppState, action: Action): void {
       break;
     }
 
-    case 'setCanvasDims': {
-      state.uiState.canvasDims = {
-        x: action.width,
-        y: action.height,
+    case 'setCanvasParams': {
+      state.uiState.canvasParams = {
+        width: action.width,
+        height: action.height,
+        canvasScreenXform: action.canvasScreenXform,
       };
-      state.uiState.panelRects = computePanelRects(state.uiState.canvasDims);
       break;
     }
 
-    case 'mouseDown':
-    case 'touchStart': {
-      const uist = state.uiState;
-
-      let inputId: 'mouse' | number;
-      if (action.type === 'mouseDown') {
-        const mouseDragStates = uist.dragStates.filter(s => (s.inputId === 'mouse'));
-        invariant(mouseDragStates.length === 0, 'mouseDown received when there are already mouse drag states');
-        inputId = 'mouse';
-      } else if (action.type === 'touchStart') {
-        inputId = action.id;
-      } else {
-        invariant(false);
+    case 'touchMove': {
+      const ds = findMatchingDragState(action.touchId);
+      if (!ds) {
+        break;
       }
 
-      const hit = hitTest(action.pos, state.uiState.hitTargets);
-      if (hit) {
-        switch (hit.entity.type) {
-          case 'paletteKind':
+      switch (ds.type) {
+        case 'fromKindPalette': {
+          ds.pos = action.pos;
+          if ((ds.pos.y - ds.startPos.y) < -15) {
+            removeDragState(ds);
             uist.dragStates.push({
-              type: 'fromKindPalette',
-              inputId,
-              kindId: hit.entity.kindId,
-              startPos: action.pos,
-              pos: action.pos,
-              size: hit.entity.size,
-              spriteOffset: vec2scale(vec2sub(action.pos, hit.entity.pos), 1/hit.entity.size),
-              detached: false,
-              sizingToViewport: false,
+              type: 'placingKind',
+              touchId: ds.touchId,
+              kindId: ds.kindId,
+              pos: ds.pos,
+              size: ds.size,
+              offset: ds.offset,
+              sizingToWorldview: false,
             });
-            break;
-
-          case 'viewportBg':
-            uist.dragStates.push({
-              type: 'fromViewportBg',
-              inputId,
-              prevPos: action.pos,
-            });
-            break;
-
-          case 'viewportObj': {
-            const objects = state.worldState.objects;
-            const objId = hit.entity.objId;
-            const obj = objects.get(objId)!;
-            const kindId = obj.kind.id;
-            objects.delete(objId);
-
-            uist.dragStates.push({
-              type: 'fromViewportObj',
-              inputId,
-              kindId,
-              pos: action.pos,
-              size: hit.entity.size,
-              spriteOffset: vec2scale(vec2sub(action.pos, hit.entity.pos), 1/hit.entity.size),
-            });
-            break;
           }
+          break;
+        }
+
+        case 'placingKind': {
+          ds.pos = action.pos;
+          if (touchPosInsideCanvas(uist, ds.pos)) {
+            ds.sizingToWorldview = true;
+          }
+          break;
+        }
+
+        case 'fromWorldviewBg': {
+          const bgDrags = state.uiState.dragStates.filter(s => (s.type === 'fromWorldviewBg'));
+
+          invariant(bgDrags.length !== 0);
+          if (bgDrags.length === 1) {
+            invariant(bgDrags[0] === ds);
+            const screenDelta = vec2sub(ds.prevPos, action.pos);
+            const worldCanvasXform = getWorldCanvasXform(uist);
+            const worldDelta = vec2scale(screenDelta, 1/(worldCanvasXform.s*uist.canvasParams.canvasScreenXform.s));
+            uist.worldviewState.center = vec2add(uist.worldviewState.center, worldDelta);
+          } else if (bgDrags.length === 2) {
+            const dragA = bgDrags[0];
+            const dragB = bgDrags[1];
+            invariant(dragA.type === 'fromWorldviewBg');
+            invariant(dragB.type === 'fromWorldviewBg');
+
+            // change world->canvas mapping such that before point pair distance is mapped to after point pair distance,
+            // and old midpoint is mapped to new midpoint
+            const zoomTrans = (before: [Vec2, Vec2], after: [Vec2, Vec2]): void => {
+              const beforeDist = vec2dist(before[0], before[1]);
+              const afterDist = vec2dist(after[0], after[1]);
+              if (afterDist !== 0) {
+                const ratio = beforeDist/afterDist;
+
+                const beforeMid = vec2lerp(before[0], before[1], 0.5);
+                const afterMid = vec2lerp(after[0], after[1], 0.5);
+
+                const worldCanvasXform = getWorldCanvasXform(uist);
+                const beforeMidWorld = applyInvSTXform(worldCanvasXform, applyInvSTXform(uist.canvasParams.canvasScreenXform, beforeMid));
+                const afterMidWorld = applyInvSTXform(worldCanvasXform, applyInvSTXform(uist.canvasParams.canvasScreenXform, afterMid));
+                const worldDiff = vec2sub(afterMidWorld, beforeMidWorld);
+
+                uist.worldviewState.fitRadius *= ratio;
+                uist.worldviewState.center = vec2sub(uist.worldviewState.center, vec2scale(worldDiff, 1 /*TODO: figure out scale? pretty sure this needs to be related to ratio, but not clear how*/));
+              }
+            };
+
+            if (dragA === ds) {
+              zoomTrans([dragA.prevPos, dragB.prevPos], [action.pos, dragB.prevPos]);
+            } else if (dragB === ds) {
+              zoomTrans([dragA.prevPos, dragB.prevPos], [dragA.prevPos, action.pos]);
+            } else {
+              invariant(false);
+            }
+          }
+          ds.prevPos = action.pos;
+          break;
         }
       }
+
       break;
     }
 
-    case 'mouseUp':
     case 'touchEnd': {
-      const uist = state.uiState;
-      const ds = findMatchingDragState(action);
+      const ds = findMatchingDragState(action.touchId);
       if (!ds) {
         break;
       }
 
       switch (ds.type) {
         case 'fromKindPalette':
-        case 'fromViewportObj': {
-          if (pointInRect(ds.pos, uist.panelRects.viewport)) {
-            const xforms = getCanvasWorldXforms(uist);
+          removeDragState(ds);
+          break;
+
+        case 'placingKind': {
+          if (touchPosInsideCanvas(uist, ds.pos)) {
+            const worldCanvasXform = getWorldCanvasXform(uist);
             const kind = state.codeState.kinds.get(ds.kindId)!;
             const size = getKindInitialSize(kind);
-            const worldPos = vec2sub(applyXform(xforms.canvasToWorld, ds.pos), vec2scale(ds.spriteOffset, size));
+            const worldPos = vec2sub(applyInvSTXform(worldCanvasXform, applyInvSTXform(uist.canvasParams.canvasScreenXform, ds.pos)), vec2scale(ds.offset, size));
             addObject(state.worldState, kind, worldPos, size);
           }
-          uist.dragStates = uist.dragStates.filter(s => (s !== ds));
+          removeDragState(ds);
           break;
         }
 
-        case 'fromViewportBg':
-          uist.dragStates = uist.dragStates.filter(s => (s !== ds));
+        case 'fromWorldviewBg':
+          removeDragState(ds);
           break;
       }
-      break;
-    }
-
-    case 'mouseMove':
-    case 'touchMove': {
-      const uist = state.uiState;
-      const ds = findMatchingDragState(action);
-      if (!ds) {
-        break;
-      }
-
-      switch (ds.type) {
-        case 'fromKindPalette':
-        case 'fromViewportObj': {
-          ds.pos = action.pos;
-
-          if (ds.type === 'fromKindPalette') {
-            if (!ds.detached) {
-              if ((ds.pos.y - ds.startPos.y) < -25) {
-                ds.detached = true;
-              }
-            }
-
-            if (!ds.sizingToViewport) {
-              if (pointInRect(ds.pos, uist.panelRects.viewport)) {
-                ds.sizingToViewport = true;
-              }
-            }
-          }
-
-          break;
-        }
-
-        case 'fromViewportBg': {
-          const canvasDelta = vec2sub(ds.prevPos, action.pos);
-          const xforms = getCanvasWorldXforms(uist);
-          const worldDelta = vec2scale(canvasDelta, xforms.canvasToWorld.s);
-          ds.prevPos = action.pos;
-          uist.viewportState.center = vec2add(uist.viewportState.center, worldDelta);
-          break;
-        }
-      }
-
       break;
     }
 
     case 'wheel': {
-      const uist = state.uiState;
-      if (pointInRect(action.pos, uist.panelRects.viewport)) {
-        uist.viewportState.fitRadius *= Math.exp(0.001*action.deltaY);
+      uist.worldviewState.fitRadius *= Math.exp(0.001*action.deltaY);
+      break;
+    }
+
+    case 'touchStartKindPalette': {
+      uist.dragStates.push({
+        type: 'fromKindPalette',
+        touchId: action.touchId,
+        kindId: action.kindId,
+        startPos: action.pos,
+        pos: action.pos,
+        size: action.size,
+        offset: action.offset,
+      });
+      break;
+    }
+
+    case 'touchStartCanvas': {
+      const touchCanvasPos = applyInvSTXform(uist.canvasParams.canvasScreenXform, action.pos);
+      const hit = canvasHitTest(touchCanvasPos, state.uiState.canvasHitTargets);
+      if (hit) {
+        const objects = state.worldState.objects;
+        const objId = hit.objId;
+        const obj = objects.get(objId)!;
+        const kindId = obj.kind.id;
+        objects.delete(objId);
+
+        const worldCanvasXform = getWorldCanvasXform(uist);
+        const canvasPos = applySTXform(worldCanvasXform, obj.pos);
+        const canvasSize = worldCanvasXform.s*obj.size;
+        const offset = vec2scale(vec2sub(touchCanvasPos, canvasPos), 1/canvasSize);
+
+        const screenSize = uist.canvasParams.canvasScreenXform.s*canvasSize;
+
+        uist.dragStates.push({
+          type: 'placingKind',
+          touchId: action.touchId,
+          kindId,
+          pos: action.pos,
+          size: screenSize,
+          offset,
+          sizingToWorldview: true,
+        });
+      } else {
+        uist.dragStates.push({
+          type: 'fromWorldviewBg',
+          touchId: action.touchId,
+          prevPos: action.pos,
+        });
       }
       break;
     }
@@ -517,6 +473,7 @@ interface RuleLayout {
   readonly height: number;
 }
 
+/*
 // we assume ctx.textBaseline = 'top'
 function layoutRule(ctx: CanvasRenderingContext2D, ruleSchema: RuleSchema, parsed: ParsedRule, args: ReadonlyArray<RuleArg | undefined>): RuleLayout {
   const resultItems: Array<RuleLayoutItem> = [];
@@ -592,6 +549,7 @@ function renderRule(ctx: CanvasRenderingContext2D, ruleSchema: RuleSchema, parse
 
   return boxHeight;
 }
+*/
 
 export function renderAppState(state: AppState, canvas: HTMLCanvasElement) {
   const canvasWidth = canvas.width;
@@ -600,43 +558,12 @@ export function renderAppState(state: AppState, canvas: HTMLCanvasElement) {
   const ctx = canvas.getContext("2d");
   invariant(ctx);
 
-  ctx.textBaseline = 'top';
-  ctx.font = '32px sans-serif';
-
   ctx.clearRect(0, 0, canvasWidth, canvasHeight);
-
-  const panelRects = state.uiState.panelRects;
-
-  const rulePaletteRect = panelRects.rulePalette;
-  const kindPaletteRect = panelRects.kindPalette;
-  const viewportRect = panelRects.viewport;
-
-  /**
-   * PANEL BORDERS
-   */
-
-  ctx.strokeStyle = '#888';
-
-  ctx.beginPath();
-  ctx.moveTo(rulePaletteRect.left+rulePaletteRect.width, rulePaletteRect.top);
-  ctx.lineTo(rulePaletteRect.left+rulePaletteRect.width, rulePaletteRect.top+rulePaletteRect.height);
-  ctx.stroke();
-
-  ctx.beginPath();
-  ctx.moveTo(kindPaletteRect.left, kindPaletteRect.top);
-  ctx.lineTo(kindPaletteRect.left+kindPaletteRect.width, kindPaletteRect.top);
-  ctx.stroke();
-
-  ctx.beginPath();
-  ctx.moveTo(viewportRect.left, viewportRect.top);
-  ctx.lineTo(viewportRect.left, viewportRect.top+viewportRect.height);
-  ctx.stroke();
-
-  const newHitTargets: Array<HitTarget> = [];
 
   /**
    * RULE SCHEMAS
    */
+  /*
   const RULE_SCHEMA_SPACING = 20;
   const RULE_SCHEMA_TOP_MARGIN = 20;
   const RULE_SCHEMA_LEFT_MARGIN = 20;
@@ -650,84 +577,22 @@ export function renderAppState(state: AppState, canvas: HTMLCanvasElement) {
     y += renderRule(ctx, schema, PARSED_SCHEMAS.get(schemaId)!, pos, args);
     y += RULE_SCHEMA_SPACING;
   }
+  */
 
-  /**
-   * KIND PALETTE
-   */
-  let i = 0;
-  state.codeState.kinds.forEach((kind, id) => {
-    const pos = {
-      x: kindPaletteRect.left + (i + 0.5)*kindPaletteRect.height,
-      y: kindPaletteRect.top + 0.5*kindPaletteRect.height,
-    };
-    const size = 0.9*kindPaletteRect.height;
-    const rect = drawSprite(ctx, kind.sprite, pos, size);
-    newHitTargets.push({
-      rect,
-      entity: {
-        type: 'paletteKind',
-        kindId: id,
-        pos,
-        size,
-      },
-    });
-    i++;
-  });
+  const newHitTargets: Array<WorldviewHitTarget> = [];
 
-  /**
-   * VIEWPORT
-   */
-  ctx.save();
-
-  // clip to the viewport
-  ctx.beginPath();
-  ctx.rect(viewportRect.left, viewportRect.top, viewportRect.width, viewportRect.height);
-  ctx.clip();
-
-  newHitTargets.push({
-    rect: viewportRect,
-    entity: {
-      type: 'viewportBg',
-    },
-  });
-
-  const xforms = getCanvasWorldXforms(state.uiState);
+  const worldCanvasXform = getWorldCanvasXform(state.uiState);
   state.worldState.objects.forEach((obj, objId) => {
-    const pos = applyXform(xforms.worldToCanvas, obj.pos);
-    const size = xforms.worldToCanvas.s*obj.size;
+    const pos = applySTXform(worldCanvasXform, obj.pos);
+    const size = worldCanvasXform.s*obj.size;
     const rect = drawSprite(ctx, obj.kind.sprite, pos, size);
     newHitTargets.push({
       rect,
-      entity: {
-        type: 'viewportObj',
-        objId,
-        pos,
-        size,
-      },
+      objId,
     });
   });
-  ctx.restore();
 
-  /**
-   * DRAGGED ITEMS
-   */
-  ctx.globalAlpha = 0.5;
-  for (const ds of state.uiState.dragStates) {
-    switch (ds.type) {
-      case 'fromKindPalette':
-      case 'fromViewportObj': {
-        if ((ds.type === 'fromKindPalette') && !ds.detached) {
-          break;
-        }
-        const sprite = state.codeState.kinds.get(ds.kindId)!.sprite;
-        drawSprite(ctx, sprite, vec2sub(ds.pos, vec2scale(ds.spriteOffset, ds.size)), ds.size);
-        break;
-      }
-    }
-  }
-  ctx.globalAlpha = 1;
-
-  state.uiState.hitTargets = newHitTargets;
+  state.uiState.canvasHitTargets = newHitTargets;
 
   // sanity check that we have canvas dims correct
   ctx.fillRect(canvasWidth-15, canvasHeight-15, 10, 10);

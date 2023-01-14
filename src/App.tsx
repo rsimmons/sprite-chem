@@ -1,9 +1,10 @@
 import React, { useEffect, useRef } from 'react';
 
 import { invariant } from './util';
-import { initAppState, renderAppState, updateAppState, AppState } from './state';
+import { initAppState, renderAppState, updateAppState, AppState, TouchPos, Action } from './state';
+import { useEffectfulReducer } from './useEffectfulReducer';
 import './App.css';
-import { Vec2 } from './vec';
+import { STXform, Vec2, vec2scale, vec2sub } from './vec';
 
 function App() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -31,11 +32,15 @@ function App() {
     }
   };
 
-  const stateRef = useRef<AppState>(initAppState());
+  const [state, dispatch] = useEffectfulReducer((s: AppState, a: Action, d) => {
+    updateAppState(s, a);
+    return {
+      ...s, // to defeat issue where setState doesn't re-render unless arg has changed
+    }
+  }, () => initAppState());
 
   const render = (dt: number): void => {
-    const state = stateRef.current;
-    updateAppState(state, {
+    dispatch({
       type: 'advanceTime',
       dt,
     });
@@ -47,10 +52,17 @@ function App() {
 
     sizeCanvas(canvas);
 
-    updateAppState(state, {
-      type: 'setCanvasDims',
+    const canvasRect = canvas.getBoundingClientRect();
+
+    dispatch({
+      type: 'setCanvasParams',
       width: canvas.width,
       height: canvas.height,
+      canvasScreenXform: {
+        s: 1/pixelScaleRef.current,
+        tx: canvasRect.left,
+        ty: canvasRect.top,
+      },
     });
 
     renderAppState(state, canvas);
@@ -82,111 +94,189 @@ function App() {
     // eslint-disable-next-line
   }, []);
 
-  const pointRelativeToCanvas = (clientX: number, clientY: number): Vec2 => {
-    invariant(canvasRef.current);
-    const pixelScale = pixelScaleRef.current;
-    const rect = canvasRef.current.getBoundingClientRect();
-    const x = pixelScale*(clientX - rect.left);
-    const y = pixelScale*(clientY - rect.top);
-    return {x, y};
+  interface ClientPos {
+    readonly clientX: number;
+    readonly clientY: number;
   }
-
-  const pointFromMouseEvent = (e: React.MouseEvent | MouseEvent): Vec2 => {
-    return pointRelativeToCanvas(e.clientX, e.clientY);
-  };
+  const getTouchPos = (clientPos: ClientPos): Vec2 => {
+    return {
+      x: clientPos.clientX,
+      y: clientPos.clientY,
+    }
+  }
 
   const onCanvasMouseDown = (e: React.MouseEvent) => {
     e.preventDefault();
 
-    updateAppState(stateRef.current, {
-      type: 'mouseDown',
-      pos: pointFromMouseEvent(e),
+    dispatch({
+      type: 'touchStartCanvas',
+      touchId: 'mouse',
+      pos: getTouchPos(e),
+    });
+  };
+  const onCanvasTouchStart = (e: React.TouchEvent) => {
+    for (let i = 0; i < e.changedTouches.length; i++) {
+      const touch = e.changedTouches[i];
+
+      dispatch({
+        type: 'touchStartCanvas',
+        touchId: touch.identifier,
+        pos: getTouchPos(touch),
+      });
+    }
+  };
+
+  const onKindPaletteItemMouseDown = (e: React.MouseEvent, kindId: number) => {
+    e.preventDefault();
+
+    const rect = e.currentTarget.getBoundingClientRect();
+    const maxDim = Math.max(rect.width, rect.height);
+
+    dispatch({
+      type: 'touchStartKindPalette',
+      touchId: 'mouse',
+      pos: getTouchPos(e),
+      kindId,
+      size: maxDim,
+      offset: {
+        x: (e.clientX - 0.5*(rect.left + rect.right))/maxDim,
+        y: (e.clientY - 0.5*(rect.top + rect.bottom))/maxDim,
+      },
+    });
+  };
+  const onKindPaletteItemTouchStart = (e: React.TouchEvent, kindId: number) => {
+    for (let i = 0; i < e.changedTouches.length; i++) {
+      const touch = e.changedTouches[i];
+
+      const rect = e.currentTarget.getBoundingClientRect();
+      const maxDim = Math.max(rect.width, rect.height);
+
+      dispatch({
+        type: 'touchStartKindPalette',
+        touchId: touch.identifier,
+        pos: getTouchPos(touch),
+        kindId,
+        size: maxDim,
+        offset: {
+          x: (touch.clientX - 0.5*(rect.left + rect.right))/maxDim,
+          y: (touch.clientY - 0.5*(rect.top + rect.bottom))/maxDim,
+        },
+      });
+    }
+  };
+
+  const onWindowMouseMove = (e: MouseEvent) => {
+    e.preventDefault();
+
+    dispatch({
+      type: 'touchMove',
+      touchId: 'mouse',
+      pos: getTouchPos(e),
     });
   };
 
   const onWindowMouseUp = (e: MouseEvent) => {
     e.preventDefault();
 
-    updateAppState(stateRef.current, {
-      type: 'mouseUp',
-      pos: pointFromMouseEvent(e),
+    dispatch({
+      type: 'touchEnd',
+      touchId: 'mouse',
+      pos: getTouchPos(e),
     });
   };
 
-  const onWindowMouseMove = (e: MouseEvent) => {
-    e.preventDefault();
+  const onWindowTouchMove = (e: TouchEvent) => {
+    for (let i = 0; i < e.changedTouches.length; i++) {
+      const touch = e.changedTouches[i];
 
-    updateAppState(stateRef.current, {
-      type: 'mouseMove',
-      pos: pointFromMouseEvent(e),
-    });
+      dispatch({
+        type: 'touchMove',
+        touchId: touch.identifier,
+        pos: getTouchPos(touch),
+      });
+    }
+  };
+
+  const onWindowTouchEnd = (e: TouchEvent) => {
+    for (let i = 0; i < e.changedTouches.length; i++) {
+      const touch = e.changedTouches[i];
+
+      dispatch({
+        type: 'touchEnd',
+        touchId: touch.identifier,
+        pos: getTouchPos(touch),
+      });
+    }
   };
 
   useEffect(() => {
-    window.addEventListener('mouseup', onWindowMouseUp, false);
     window.addEventListener('mousemove', onWindowMouseMove, false);
+    window.addEventListener('mouseup', onWindowMouseUp, false);
+    window.addEventListener('touchmove', onWindowTouchMove, false);
+    window.addEventListener('touchend', onWindowTouchEnd, false);
 
     return () => {
-      window.removeEventListener('mousemove', onWindowMouseUp, false);
       window.removeEventListener('mousemove', onWindowMouseMove, false);
+      window.removeEventListener('mouseup', onWindowMouseUp, false);
+      window.removeEventListener('touchmove', onWindowTouchMove, false);
+      window.removeEventListener('touchend', onWindowTouchEnd, false);
     };
   });
 
   const onCanvasWheel = (e: React.WheelEvent) => {
-    updateAppState(stateRef.current, {
+    dispatch({
       type: 'wheel',
-      pos: pointFromMouseEvent(e),
+      pos: getTouchPos(e),
       deltaY: e.deltaY,
     });
   };
 
-  const onCanvasTouchStart = (e: React.TouchEvent) => {
-    for (let i = 0; i < e.changedTouches.length; i++) {
-      const touch = e.changedTouches[i];
-
-      updateAppState(stateRef.current, {
-        type: 'touchStart',
-        id: touch.identifier,
-        pos: pointRelativeToCanvas(touch.clientX, touch.clientY),
-      });
-    }
-  };
-
-  const onCanvasTouchMove = (e: React.TouchEvent) => {
-    for (let i = 0; i < e.changedTouches.length; i++) {
-      const touch = e.changedTouches[i];
-
-      updateAppState(stateRef.current, {
-        type: 'touchMove',
-        id: touch.identifier,
-        pos: pointRelativeToCanvas(touch.clientX, touch.clientY),
-      });
-    }
-  };
-
-  const onCanvasTouchEnd = (e: React.TouchEvent) => {
-    for (let i = 0; i < e.changedTouches.length; i++) {
-      const touch = e.changedTouches[i];
-
-      updateAppState(stateRef.current, {
-        type: 'touchEnd',
-        id: touch.identifier,
-        pos: pointRelativeToCanvas(touch.clientX, touch.clientY),
-      });
-    }
-  };
-
   return (
     <div className="App">
-      <canvas
-        id="main-canvas"
-        ref={canvasRef}
-        onMouseDown={onCanvasMouseDown}
-        onWheel={onCanvasWheel}
-        onTouchStart={onCanvasTouchStart}
-        onTouchMove={onCanvasTouchMove}
-        onTouchEnd={onCanvasTouchEnd}
-      ></canvas>
+      <div className="App-rule-palette" />
+      <div className="App-rule-palette-rest">
+        <div className="App-kind-palette-rest">
+          <div className="App-rules" />
+          <div className="App-worldview-container">
+            <canvas
+              className="App-worldview-canvas"
+              ref={canvasRef}
+              onMouseDown={onCanvasMouseDown}
+              onTouchStart={onCanvasTouchStart}
+              onWheel={onCanvasWheel}
+            />
+          </div>
+        </div>
+        <div className="App-kind-palette">
+          {[...state.codeState.kinds.entries()].map(([kindId, kind]) =>
+            <img
+              src={kind.sprite.url}
+              key={kindId}
+              onMouseDown={e => onKindPaletteItemMouseDown(e, kindId)}
+              onTouchStart={e => onKindPaletteItemTouchStart(e, kindId)}
+            />
+          )}
+        </div>
+      </div>
+      <div className="App-drags">
+        {state.uiState.dragStates.map(ds => {
+          switch (ds.type) {
+            case 'placingKind': {
+              const kind = state.codeState.kinds.get(ds.kindId)!;
+              const adjPos = vec2sub(ds.pos, vec2scale(ds.offset, ds.size));
+              return <img key={ds.touchId} src={kind.sprite.url} style={{
+                position: 'absolute',
+                left: adjPos.x,
+                top: adjPos.y,
+                maxWidth: `${ds.size}px`,
+                maxHeight: `${ds.size}px`,
+                transform: 'translate(-50%, -50%)',
+              }} />
+            }
+          }
+          return null;
+        })}
+      </div>
     </div>
   );
 }

@@ -18,3 +18,10 @@ function gen32Random(): string {
 export function genUidRandom(): string {
   return gen32Random() + gen32Random();
 }
+
+let seqNum = 1;
+export function nextSeqNum(): number {
+  const result = seqNum;
+  seqNum++;
+  return result;
+}
