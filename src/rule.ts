@@ -2,13 +2,12 @@ import { RuleWorldIface } from "./ruleWorldIface";
 import { invariant } from "./util";
 import { Vec2, vec2dist } from "./vec";
 
-type RuleParamType =
+type RuleParam =
   {
     readonly type: 'kind';
-    // argument is passed as kindId number
   } | {
     readonly type: 'number';
-    // argument is passed as number
+    readonly defaultVal: number;
   };
 
 type RuleInput =
@@ -36,7 +35,14 @@ interface RuleInputsOutputs {
   readonly outputs: ReadonlyArray<RuleOutput>;
 }
 
-export type RuleArg = any;
+export type RuleArg =
+  {
+    readonly type: 'kind';
+    kindId: number;
+  } | {
+    readonly type: 'number';
+    val: number;
+  };
 
 interface RuleGlobalInputs {
   readonly touchPoints: ReadonlyArray<Vec2>;
@@ -44,7 +50,7 @@ interface RuleGlobalInputs {
 
 export interface RuleSchema {
   readonly text: string;
-  readonly params: ReadonlyArray<RuleParamType>;
+  readonly params: ReadonlyArray<RuleParam>;
   readonly getIO: (args: ReadonlyArray<RuleArg>) => RuleInputsOutputs;
   readonly apply: (args: ReadonlyArray<RuleArg>, worldIface: RuleWorldIface, globalInputs: RuleGlobalInputs) => void;
 }
@@ -120,16 +126,19 @@ export const AVAILABLE_RULE_SCHEMAS: ReadonlyMap<RuleSchemaID, RuleSchema> = new
     text: '{0|A} moves toward nearest touch point\nat speed {1|S}',
     params: [
       {type: 'kind'},
-      {type: 'number'},
+      {type: 'number', defaultVal: 1},
     ],
     getIO: (args) => {
+      invariant(args[0].type === 'kind');
+      const kindId = args[0].kindId;
+
       return {
         inputs: [
-          {type: 'kindPositions', kindId: args[0]},
+          {type: 'kindPositions', kindId},
           {type: 'touchPositions'},
         ],
         outputs: [
-          {type: 'kindMoveTowardPosition', kindId: args[0]},
+          {type: 'kindMoveTowardPosition', kindId},
         ],
       };
     },
@@ -138,8 +147,10 @@ export const AVAILABLE_RULE_SCHEMAS: ReadonlyMap<RuleSchemaID, RuleSchema> = new
         return;
       }
 
-      const kindId = args[0] as number;
-      const speed = args[1] as number;
+      invariant(args[0].type === 'kind');
+      const kindId = args[0].kindId;
+      invariant(args[1].type === 'number');
+      const speed = args[1].val;
 
       for (const obj of worldIface.iterObjectsByKindId(kindId)) {
         const objPos = worldIface.getObjectPosition(obj);
@@ -167,12 +178,18 @@ export const AVAILABLE_RULE_SCHEMAS: ReadonlyMap<RuleSchemaID, RuleSchema> = new
       {type: 'kind'},
     ],
     getIO: (args) => {
+      invariant(args[0].type === 'kind');
+      const kindAId = args[0].kindId;
+      invariant(args[1].type === 'kind');
+      const kindBId = args[1].kindId;
+
       return {
         inputs: [
-          {type: 'kindPositions', kindId: args[0]},
+          {type: 'kindPositions', kindId: kindAId},
+          {type: 'kindPositions', kindId: kindBId},
         ],
         outputs: [
-          {type: 'kindRemove', kindId: args[0]},
+          {type: 'kindRemove', kindId: kindAId},
         ],
       };
     },
@@ -186,18 +203,32 @@ export const PARSED_SCHEMAS = new Map([...AVAILABLE_RULE_SCHEMAS.entries()].map(
 
 export interface RuleInstance {
   readonly schemaId: string;
-  readonly args: ReadonlyArray<RuleArg>;
+  readonly args: Array<RuleArg | undefined>;
+}
+
+export interface ValidatedRuleInstance {
+  readonly schemaId: string;
+  readonly args: Array<RuleArg>;
 }
 
 export interface RulesAnalysis {
-  readonly sortedRules: ReadonlyArray<RuleInstance>;
+  readonly sortedRules: ReadonlyArray<ValidatedRuleInstance>;
 }
 
 export function analyzeRules(rules: ReadonlyArray<RuleInstance>): RulesAnalysis {
   // TODO: topological sort, etc.
+  const sortedRules: Array<ValidatedRuleInstance> = [];
+  for (const rule of rules) {
+    if (rule.args.every(arg => (arg !== undefined))) {
+      sortedRules.push({
+        schemaId: rule.schemaId,
+        args: rule.args as Array<RuleArg>,
+      });
+    }
+  }
 
   return {
-    sortedRules: rules,
+    sortedRules,
   };
 }
 

@@ -1,18 +1,21 @@
 import React, { useEffect, useRef } from 'react';
 
-import { invariant } from './util';
-import { initAppState, renderAppState, updateAppState, AppState, TouchPos, Action } from './state';
+import { invariant, nodeIsAncestor } from './util';
+import { initAppState, renderAppState, updateAppState, AppState, TouchPos, Action, TouchRegion } from './state';
 import { useEffectfulReducer } from './useEffectfulReducer';
 import { Vec2, vec2scale, vec2sub } from './vec';
 import './App.css';
-import { AVAILABLE_RULE_SCHEMAS, PARSED_SCHEMAS, RuleSchema } from './rule';
+import { AVAILABLE_RULE_SCHEMAS, PARSED_SCHEMAS, RuleArg, RuleSchema } from './rule';
 
 const Rule: React.FC<{
   schemaId: string,
   schema: RuleSchema,
+  ruleId?: number,
+  args?: ReadonlyArray<RuleArg | undefined>,
   onMouseDown: React.MouseEventHandler<HTMLElement>,
   onTouchStart: React.TouchEventHandler<HTMLElement>,
-}> = ({schemaId, schema, onMouseDown, onTouchStart}) => {
+  dispatch?: (action: Action) => void,
+}> = ({schemaId, schema, ruleId, args, onMouseDown, onTouchStart, dispatch}) => {
   const parsed = PARSED_SCHEMAS.get(schemaId)!;
 
   return (
@@ -29,8 +32,73 @@ const Rule: React.FC<{
                 case 'text':
                   return <div key={itemIdx}>{item.text}</div>;
 
-                case 'param':
-                  return <div key={itemIdx} className="Rule-param-empty">{item.label}</div>;
+                case 'param': {
+                  const paramIdx = item.idx;
+                  const param = schema.params[paramIdx];
+
+                  switch (param.type) {
+                    case 'kind': {
+                      if ((args === undefined) || (args[paramIdx] === undefined)) {
+                        return (
+                          <div
+                            key={itemIdx}
+                            className="Rule-param-kind-empty"
+                            data-region={ruleId ? `ruleParam-${ruleId}-${paramIdx}` : null}
+                          >
+                            {item.label}
+                          </div>
+                        );
+                      } else {
+                        const arg = args[paramIdx];
+                        invariant(arg && (arg.type === 'kind'));
+                        return (
+                          <div
+                            key={itemIdx}
+                            className="Rule-param-kind-filled"
+                            data-region={ruleId ? `ruleParam-${ruleId}-${paramIdx}` : null}
+                          >{arg.type}</div>
+                        );
+                      }
+                    }
+
+                    case 'number': {
+                      if (args === undefined) {
+                        return (
+                          <div
+                            key={itemIdx}
+                            className="Rule-param-number-empty"
+                          >
+                            {item.label}
+                          </div>
+                        );
+                      } else {
+                        const arg = args[paramIdx];
+                        invariant(arg && (arg.type === 'number'));
+                        invariant(ruleId);
+                        invariant(dispatch);
+
+                        const handleChange = ((e: React.ChangeEvent<HTMLInputElement>) => {
+                          dispatch({
+                            type: 'setRuleArgNumber',
+                            ruleId,
+                            paramIdx,
+                            val: +e.currentTarget.value,
+                          });
+                        });
+
+                        return (
+                          <input
+                            key={itemIdx}
+                            className="Rule-param-number-filled"
+                            type="number"
+                            value={arg.val}
+                            onChange={handleChange}
+                          />
+                        );
+                      }
+                    }
+                  }
+                }
               }
             })}
           </div>
@@ -38,7 +106,7 @@ const Rule: React.FC<{
       })}
     </div>
   );
-}
+};
 
 const App: React.FC = () => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -132,14 +200,51 @@ const App: React.FC = () => {
     readonly clientX: number;
     readonly clientY: number;
   }
+
   const getTouchPos = (clientPos: ClientPos): Vec2 => {
     return {
       x: clientPos.clientX,
       y: clientPos.clientY,
     }
+  };
+
+  const getRegion = (e: ClientPos): TouchRegion => {
+    const elem = document.elementFromPoint(e.clientX, e.clientY);
+    if (elem) {
+      let n: Node | null = elem;
+      while (n) {
+        if ((n instanceof HTMLElement) && (n.dataset.region)) {
+          const regionStr = n.dataset.region!;
+          const regionParts = regionStr.split('-');
+
+          switch (regionParts[0]) {
+            case 'canvas':
+              return {type: 'canvas'};
+
+            case 'rules':
+              return {type: 'rules'};
+
+            case 'ruleParam':
+              invariant(regionParts.length === 3);
+              return {
+                type: 'ruleParam',
+                ruleId: +regionParts[1],
+                paramIdx: +regionParts[2],
+              };
+
+            default:
+              invariant(false);
+          }
+        }
+        n = n.parentNode;
+      }
+      return {type: 'other'};
+    } else {
+      return {type: 'other'};
+    }
   }
 
-  const onCanvasMouseDown = (e: React.MouseEvent) => {
+  const handleCanvasMouseDown = (e: React.MouseEvent) => {
     e.preventDefault();
 
     dispatch({
@@ -148,7 +253,7 @@ const App: React.FC = () => {
       pos: getTouchPos(e),
     });
   };
-  const onCanvasTouchStart = (e: React.TouchEvent) => {
+  const handleCanvasTouchStart = (e: React.TouchEvent) => {
     for (let i = 0; i < e.changedTouches.length; i++) {
       const touch = e.changedTouches[i];
 
@@ -160,7 +265,7 @@ const App: React.FC = () => {
     }
   };
 
-  const onKindPaletteItemMouseDown = (e: React.MouseEvent, kindId: number) => {
+  const handleKindPaletteItemMouseDown = (e: React.MouseEvent, kindId: number) => {
     e.preventDefault();
 
     const rect = e.currentTarget.getBoundingClientRect();
@@ -178,7 +283,7 @@ const App: React.FC = () => {
       },
     });
   };
-  const onKindPaletteItemTouchStart = (e: React.TouchEvent, kindId: number) => {
+  const handleKindPaletteItemTouchStart = (e: React.TouchEvent, kindId: number) => {
     for (let i = 0; i < e.changedTouches.length; i++) {
       const touch = e.changedTouches[i];
 
@@ -234,7 +339,7 @@ const App: React.FC = () => {
     }
   };
 
-  const onWindowMouseMove = (e: MouseEvent) => {
+  const handleWindowMouseMove = (e: MouseEvent) => {
     e.preventDefault();
 
     dispatch({
@@ -243,18 +348,7 @@ const App: React.FC = () => {
       pos: getTouchPos(e),
     });
   };
-
-  const onWindowMouseUp = (e: MouseEvent) => {
-    e.preventDefault();
-
-    dispatch({
-      type: 'touchEnd',
-      touchId: 'mouse',
-      pos: getTouchPos(e),
-    });
-  };
-
-  const onWindowTouchMove = (e: TouchEvent) => {
+  const handleWindowTouchMove = (e: TouchEvent) => {
     for (let i = 0; i < e.changedTouches.length; i++) {
       const touch = e.changedTouches[i];
 
@@ -266,7 +360,17 @@ const App: React.FC = () => {
     }
   };
 
-  const onWindowTouchEnd = (e: TouchEvent) => {
+  const handleWindowMouseUp = (e: MouseEvent) => {
+    e.preventDefault();
+
+    dispatch({
+      type: 'touchEnd',
+      touchId: 'mouse',
+      pos: getTouchPos(e),
+      region: getRegion(e),
+    });
+  };
+  const handleWindowTouchEnd = (e: TouchEvent) => {
     for (let i = 0; i < e.changedTouches.length; i++) {
       const touch = e.changedTouches[i];
 
@@ -274,25 +378,26 @@ const App: React.FC = () => {
         type: 'touchEnd',
         touchId: touch.identifier,
         pos: getTouchPos(touch),
+        region: getRegion(touch),
       });
     }
   };
 
   useEffect(() => {
-    window.addEventListener('mousemove', onWindowMouseMove, false);
-    window.addEventListener('mouseup', onWindowMouseUp, false);
-    window.addEventListener('touchmove', onWindowTouchMove, false);
-    window.addEventListener('touchend', onWindowTouchEnd, false);
+    window.addEventListener('mousemove', handleWindowMouseMove, false);
+    window.addEventListener('mouseup', handleWindowMouseUp, false);
+    window.addEventListener('touchmove', handleWindowTouchMove, false);
+    window.addEventListener('touchend', handleWindowTouchEnd, false);
 
     return () => {
-      window.removeEventListener('mousemove', onWindowMouseMove, false);
-      window.removeEventListener('mouseup', onWindowMouseUp, false);
-      window.removeEventListener('touchmove', onWindowTouchMove, false);
-      window.removeEventListener('touchend', onWindowTouchEnd, false);
+      window.removeEventListener('mousemove', handleWindowMouseMove, false);
+      window.removeEventListener('mouseup', handleWindowMouseUp, false);
+      window.removeEventListener('touchmove', handleWindowTouchMove, false);
+      window.removeEventListener('touchend', handleWindowTouchEnd, false);
     };
   });
 
-  const onCanvasWheel = (e: React.WheelEvent) => {
+  const handleCanvasWheel = (e: React.WheelEvent) => {
     dispatch({
       type: 'wheel',
       pos: getTouchPos(e),
@@ -315,14 +420,32 @@ const App: React.FC = () => {
       </div>
       <div className="App-rule-palette-rest">
         <div className="App-kind-palette-rest">
-          <div className="App-rules" />
+          <div className="App-rules" data-region="rules">
+            {[...state.codeState.rules.entries()].map(([ruleId, rule]) => {
+              const schema = AVAILABLE_RULE_SCHEMAS.get(rule.schemaId)!;
+
+              return <Rule
+                key={ruleId}
+                schemaId={rule.schemaId}
+                schema={schema}
+                ruleId={ruleId}
+                args={rule.args}
+                onMouseDown={e => {}}
+                onTouchStart={e => {}}
+                dispatch={dispatch}
+                // onMouseDown={e => handleRuleMouseDown(e, ruleId)}
+                // onTouchStart={e => handleRuleTouchStart(e, ruleId)}
+              />
+            })}
+          </div>
           <div className="App-worldview-container">
             <canvas
               className="App-worldview-canvas"
               ref={canvasRef}
-              onMouseDown={onCanvasMouseDown}
-              onTouchStart={onCanvasTouchStart}
-              onWheel={onCanvasWheel}
+              onMouseDown={handleCanvasMouseDown}
+              onTouchStart={handleCanvasTouchStart}
+              onWheel={handleCanvasWheel}
+              data-region="canvas"
             />
           </div>
         </div>
@@ -331,8 +454,8 @@ const App: React.FC = () => {
             <img
               src={kind.sprite.url}
               key={kindId}
-              onMouseDown={e => onKindPaletteItemMouseDown(e, kindId)}
-              onTouchStart={e => onKindPaletteItemTouchStart(e, kindId)}
+              onMouseDown={e => handleKindPaletteItemMouseDown(e, kindId)}
+              onTouchStart={e => handleKindPaletteItemTouchStart(e, kindId)}
             />
           )}
         </div>
@@ -379,6 +502,6 @@ const App: React.FC = () => {
       </div>
     </div>
   );
-}
+};
 
 export default App;

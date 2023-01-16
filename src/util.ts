@@ -25,3 +25,15 @@ export function nextSeqNum(): number {
   seqNum++;
   return result;
 }
+
+// is a an ancestor of b?
+export function nodeIsAncestor(a: Node, b: Node): boolean {
+  let n: Node | null = b;
+  while (n) {
+    if (a === b) {
+      return true;
+    }
+    n = n.parentNode;
+  }
+  return false;
+}

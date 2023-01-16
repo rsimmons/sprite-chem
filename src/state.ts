@@ -10,10 +10,22 @@ import { AVAILABLE_RULE_SCHEMAS, ParsedRule, ParsedRuleItem, PARSED_SCHEMAS, Rul
 
 interface CodeState {
   readonly kinds: ReadonlyMap<number, Kind>;
-  readonly rules: ReadonlyMap<number, RuleInstance>;
+  readonly rules: Map<number, RuleInstance>;
 }
 
 export type TouchPos = Vec2;
+export type TouchRegion =
+  {
+    readonly type: 'canvas';
+  } | {
+    readonly type: 'rules';
+  } | {
+    readonly type: 'ruleParam';
+    readonly ruleId: number;
+    readonly paramIdx: number;
+  } | {
+    readonly type: 'other';
+  };
 
 type DragState =
   {
@@ -114,6 +126,7 @@ export type Action =
     readonly type: 'touchEnd';
     readonly touchId: TouchID;
     readonly pos: TouchPos;
+    readonly region: TouchRegion;
   } | {
     readonly type: 'touchStartKindPalette';
     readonly touchId: TouchID;
@@ -131,6 +144,15 @@ export type Action =
     readonly pos: TouchPos;
     readonly schemaId: string;
     readonly offset: Vec2;
+  } | {
+    readonly type: 'touchEndRules';
+    readonly touchId: TouchID;
+    readonly pos: TouchPos;
+  } | {
+    readonly type: 'setRuleArgNumber';
+    readonly ruleId: number;
+    readonly paramIdx: number;
+    readonly val: number;
   };
 
 export function initAppState(): AppState {
@@ -370,12 +392,20 @@ export function updateAppState(state: AppState, action: Action): void {
           break;
 
         case 'placingKind': {
-          if (touchPosInsideCanvas(uist, ds.pos)) {
+          if (action.region.type === 'canvas') {
             const worldCanvasXform = getWorldCanvasXform(uist);
             const kind = state.codeState.kinds.get(ds.kindId)!;
             const size = getKindInitialSize(kind);
             const worldPos = vec2sub(applyInvSTXform(worldCanvasXform, applyInvSTXform(uist.canvasParams.canvasScreenXform, ds.pos)), vec2scale(ds.offset, size));
             addObject(state.worldState, kind, worldPos, size);
+          } else if (action.region.type === 'ruleParam') {
+            const rule = state.codeState.rules.get(action.region.ruleId);
+            invariant(rule);
+
+            const schema = AVAILABLE_RULE_SCHEMAS.get(rule.schemaId)!;
+            if (schema.params[action.region.paramIdx].type === 'kind') {
+              rule.args[action.region.paramIdx] = {type: 'kind', kindId: ds.kindId};
+            }
           }
           removeDragState(ds);
           break;
@@ -386,7 +416,21 @@ export function updateAppState(state: AppState, action: Action): void {
           break;
 
         case 'placingRuleSchema':
-          // TODO: add to code rules
+          if ((action.region.type === 'rules') || (action.region.type === 'ruleParam')) {
+            const schema = AVAILABLE_RULE_SCHEMAS.get(ds.schemaId)!;
+            state.codeState.rules.set(nextSeqNum(), {
+              schemaId: ds.schemaId,
+              args: schema.params.map(param => {
+                switch (param.type) {
+                  case 'kind':
+                    return undefined;
+
+                  case 'number':
+                    return {type: 'number', val: param.defaultVal};
+                }
+              }),
+            });
+          }
           removeDragState(ds);
           break;
       }
@@ -455,6 +499,17 @@ export function updateAppState(state: AppState, action: Action): void {
         pos: action.pos,
         offset: action.offset,
       });
+      break;
+    }
+
+    case 'setRuleArgNumber': {
+      const rule = state.codeState.rules.get(action.ruleId);
+      invariant(rule);
+      invariant(action.paramIdx < rule.args.length);
+      const param = rule.args[action.paramIdx];
+      invariant(param);
+      invariant(param.type === 'number');
+      param.val = action.val;
       break;
     }
   }
