@@ -1,5 +1,9 @@
 import {useRef, useState, useCallback} from 'react';
 
+interface ImmutableRef<T> {
+  readonly current: T;
+}
+
 // React's built-in useReducer expects the reducer parameter to be a pure function, as it may
 // call the reducer multiple times (redundantly) for the same state+action. This is an
 // alternative to useReducer that has the same signature, but will only call the reducer function
@@ -7,7 +11,7 @@ import {useRef, useState, useCallback} from 'react';
 // I assume there must be disadvantages to this approach compared to other solutions I've seen, e.g.
 // https://github.com/davidkpiano/useEffectReducer
 // since this seems much simpler, but I don't know what they are. I must be missing something.
-export function useEffectfulReducer<S, A>(reducer: (s: S, a: A, d: (action: A) => void) => S, createInitState: () => S): [S, (action: A) => void] {
+export function useEffectfulReducer<S, A>(reducer: (s: S, a: A, d: (action: A) => void) => S, createInitState: () => S): [ImmutableRef<S>, (action: A) => void] {
   // The state is stored in useState, in order to trigger re-renders.
   // But the "authoritative" copy is stored with useRef, so that we don't
   // have any issues with see old versions from useState.
@@ -38,5 +42,5 @@ export function useEffectfulReducer<S, A>(reducer: (s: S, a: A, d: (action: A) =
     setCopiedState(newState);
   }, [reducer]);
 
-  return [copiedState, memoizedDispatch];
+  return [authoritativeState as ImmutableRef<S>, memoizedDispatch];
 }

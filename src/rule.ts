@@ -44,7 +44,7 @@ export type RuleArg =
     val: number;
   };
 
-interface RuleGlobalInputs {
+export interface RuleGlobalInputs {
   readonly touchPoints: ReadonlyArray<Vec2>;
 }
 
@@ -126,7 +126,7 @@ export const AVAILABLE_RULE_SCHEMAS: ReadonlyMap<RuleSchemaID, RuleSchema> = new
     text: '{0|A} moves toward nearest touch point\nat speed {1|S}',
     params: [
       {type: 'kind'},
-      {type: 'number', defaultVal: 1},
+      {type: 'number', defaultVal: 5},
     ],
     getIO: (args) => {
       invariant(args[0].type === 'kind');
@@ -164,7 +164,7 @@ export const AVAILABLE_RULE_SCHEMAS: ReadonlyMap<RuleSchemaID, RuleSchema> = new
             nearestPos = tp;
           }
         }
-        invariant(nearestDist && nearestPos);
+        invariant((nearestDist !== undefined) && (nearestPos !== undefined));
 
         worldIface.setObjectMoveTowardPosition(obj, nearestPos, speed);
       }

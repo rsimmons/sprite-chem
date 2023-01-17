@@ -1,6 +1,6 @@
 export interface Vec2 {
-  x: number;
-  y: number;
+  readonly x: number;
+  readonly y: number;
 }
 
 export function vec2add(a: Vec2, b: Vec2): Vec2 {
@@ -15,6 +15,10 @@ export function vec2sub(a: Vec2, b: Vec2): Vec2 {
     x: a.x - b.x,
     y: a.y - b.y,
   };
+}
+
+export function vec2len(v: Vec2): number {
+  return Math.sqrt(v.x*v.x + v.y*v.y);
 }
 
 export function vec2dist(a: Vec2, b: Vec2): number {

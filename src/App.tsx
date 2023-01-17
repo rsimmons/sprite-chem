@@ -1,11 +1,11 @@
 import React, { useEffect, useRef } from 'react';
 
-import { invariant, nodeIsAncestor } from './util';
-import { initAppState, renderAppState, updateAppState, AppState, TouchPos, Action, TouchRegion } from './state';
+import { invariant } from './util';
+import { initAppState, renderCanvas, updateAppState, AppState, Action, TouchRegion, CodeState } from './state';
 import { useEffectfulReducer } from './useEffectfulReducer';
 import { Vec2, vec2scale, vec2sub } from './vec';
-import './App.css';
 import { AVAILABLE_RULE_SCHEMAS, PARSED_SCHEMAS, RuleArg, RuleSchema } from './rule';
+import './App.css';
 
 const Rule: React.FC<{
   schemaId: string,
@@ -15,7 +15,8 @@ const Rule: React.FC<{
   onMouseDown: React.MouseEventHandler<HTMLElement>,
   onTouchStart: React.TouchEventHandler<HTMLElement>,
   dispatch?: (action: Action) => void,
-}> = ({schemaId, schema, ruleId, args, onMouseDown, onTouchStart, dispatch}) => {
+  codeState: CodeState,
+}> = ({schemaId, schema, ruleId, args, onMouseDown, onTouchStart, dispatch, codeState}) => {
   const parsed = PARSED_SCHEMAS.get(schemaId)!;
 
   return (
@@ -42,7 +43,7 @@ const Rule: React.FC<{
                         return (
                           <div
                             key={itemIdx}
-                            className="Rule-param-kind-empty"
+                            className={'Rule-param-kind-empty' + ((args !== undefined) ? ' Rule-param-kind-needed' : '')}
                             data-region={ruleId ? `ruleParam-${ruleId}-${paramIdx}` : null}
                           >
                             {item.label}
@@ -51,12 +52,18 @@ const Rule: React.FC<{
                       } else {
                         const arg = args[paramIdx];
                         invariant(arg && (arg.type === 'kind'));
+                        const kind = codeState.kinds.get(arg.kindId);
+                        invariant(kind);
                         return (
                           <div
                             key={itemIdx}
                             className="Rule-param-kind-filled"
                             data-region={ruleId ? `ruleParam-${ruleId}-${paramIdx}` : null}
-                          >{arg.type}</div>
+                          >
+                            <img
+                              src={kind.sprite.url}
+                            />
+                          </div>
                         );
                       }
                     }
@@ -134,12 +141,13 @@ const App: React.FC = () => {
     }
   };
 
-  const [state, dispatch] = useEffectfulReducer((s: AppState, a: Action, d) => {
+  const [stateRef, dispatch] = useEffectfulReducer((s: AppState, a: Action, d) => {
     updateAppState(s, a);
     return {
       ...s, // to defeat issue where setState doesn't re-render unless arg has changed
     }
   }, () => initAppState());
+  const state = stateRef.current;
 
   const render = (dt: number): void => {
     dispatch({
@@ -167,7 +175,7 @@ const App: React.FC = () => {
       },
     });
 
-    renderAppState(state, canvas);
+    renderCanvas(stateRef.current, canvas);
   };
 
   const rafRef = useRef<number | undefined>();
@@ -405,6 +413,12 @@ const App: React.FC = () => {
     });
   };
 
+  const handleRunningToggleClick = (e: React.MouseEvent) => {
+    dispatch({
+      type: 'toggleRunning',
+    });
+  };
+
   return (
     <div className="App">
       <div className="App-rule-palette">
@@ -415,6 +429,7 @@ const App: React.FC = () => {
             schema={schema}
             onMouseDown={e => handleRulePaletteMouseDown(e, schemaId)}
             onTouchStart={e => handleRulePaletteTouchStart(e, schemaId)}
+            codeState={state.codeState}
           />
         })}
       </div>
@@ -432,21 +447,29 @@ const App: React.FC = () => {
                 args={rule.args}
                 onMouseDown={e => {}}
                 onTouchStart={e => {}}
-                dispatch={dispatch}
                 // onMouseDown={e => handleRuleMouseDown(e, ruleId)}
                 // onTouchStart={e => handleRuleTouchStart(e, ruleId)}
+                dispatch={dispatch}
+                codeState={state.codeState}
               />
             })}
           </div>
-          <div className="App-worldview-container">
-            <canvas
-              className="App-worldview-canvas"
-              ref={canvasRef}
-              onMouseDown={handleCanvasMouseDown}
-              onTouchStart={handleCanvasTouchStart}
-              onWheel={handleCanvasWheel}
-              data-region="canvas"
-            />
+          <div className="App-rules-rest">
+            <div className="App-world-controls">
+              <button onClick={handleRunningToggleClick}>
+                {state.running ? 'Edit' : 'Run'}
+              </button>
+            </div>
+            <div className="App-worldview-container">
+              <canvas
+                className="App-worldview-canvas"
+                ref={canvasRef}
+                onMouseDown={handleCanvasMouseDown}
+                onTouchStart={handleCanvasTouchStart}
+                onWheel={handleCanvasWheel}
+                data-region="canvas"
+              />
+            </div>
           </div>
         </div>
         <div className="App-kind-palette">
@@ -492,7 +515,8 @@ const App: React.FC = () => {
                     schema={schema}
                     onMouseDown={e => handleRulePaletteMouseDown(e, ds.schemaId)}
                     onTouchStart={e => handleRulePaletteTouchStart(e, ds.schemaId)}
-                  />
+                    codeState={state.codeState}
+                    />
                 </div>
               );
             }

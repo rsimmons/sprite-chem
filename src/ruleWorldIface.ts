@@ -1,5 +1,6 @@
+import { invariant } from "./util";
 import { Vec2 } from "./vec";
-import { Object, WorldState } from "./world";
+import { Object, RunningWorldState } from "./world";
 
 type ObjHandle = Object;
 
@@ -9,30 +10,38 @@ export interface RuleWorldIface {
   readonly setObjectMoveTowardPosition: (obj: ObjHandle, pos: Vec2, speed: number) => void;
 }
 
-class RuleWorldAdapter implements RuleWorldIface {
-  private ws: WorldState;
+type ObjMoveEffect =
+  {
+    readonly type: 'towardPos';
+    readonly pos: Vec2;
+    readonly speed: number;
+  };
 
-  constructor(ws: WorldState) {
-    this.ws = ws;
-  }
-
-  *iterObjectsByKindId(kindId: number) {
-    for (const obj of this.ws.objects.values()) {
-      if (obj.kind.id === kindId) {
-        yield obj;
-      }
-    }
-  }
-
-  getObjectPosition(obj: Object) {
-    return obj.pos;
-  }
-
-  setObjectMoveTowardPosition(obj: Object, pos: Vec2, speed: number) {
-    throw new Error('unimplemented');
-  }
+export interface RuleWorldEffects {
+  readonly objMoveEffs: Map<number, ObjMoveEffect>;
 }
 
-export function createAdapter(ws: WorldState) {
-  return new RuleWorldAdapter(ws);
+export function createWorldIface(ws: RunningWorldState, eff: RuleWorldEffects): RuleWorldIface {
+  return {
+    iterObjectsByKindId: function*(kindId: number) { // no generator arrow fns!
+      for (const obj of ws.objects.values()) {
+        if (obj.kind.id === kindId) {
+          yield obj;
+        }
+      }
+    },
+
+    getObjectPosition: (obj: Object) => {
+      return obj.pos;
+    },
+
+    setObjectMoveTowardPosition: (obj: Object, pos: Vec2, speed: number) => {
+      invariant(!eff.objMoveEffs.has(obj.id));
+      eff.objMoveEffs.set(obj.id, {
+        type: 'towardPos',
+        pos,
+        speed,
+      });
+    },
+  };
 }
