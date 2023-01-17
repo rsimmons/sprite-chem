@@ -7,7 +7,9 @@ type ObjHandle = Object;
 export interface RuleWorldIface {
   readonly iterObjectsByKindId: (kindId: number) => Generator<ObjHandle>;
   readonly getObjectPosition: (obj: ObjHandle) => Vec2;
+  readonly getObjectSize: (obj: ObjHandle) => number;
   readonly setObjectMoveTowardPosition: (obj: ObjHandle, pos: Vec2, speed: number) => void;
+  readonly removeObject: (obj: ObjHandle) => void;
 }
 
 type ObjMoveEffect =
@@ -19,6 +21,7 @@ type ObjMoveEffect =
 
 export interface RuleWorldEffects {
   readonly objMoveEffs: Map<number, ObjMoveEffect>;
+  readonly objsRemoved: Set<number>;
 }
 
 export function createWorldIface(ws: RunningWorldState, eff: RuleWorldEffects): RuleWorldIface {
@@ -35,6 +38,10 @@ export function createWorldIface(ws: RunningWorldState, eff: RuleWorldEffects): 
       return obj.pos;
     },
 
+    getObjectSize: (obj: Object) => {
+      return obj.size;
+    },
+
     setObjectMoveTowardPosition: (obj: Object, pos: Vec2, speed: number) => {
       invariant(!eff.objMoveEffs.has(obj.id));
       eff.objMoveEffs.set(obj.id, {
@@ -43,5 +50,9 @@ export function createWorldIface(ws: RunningWorldState, eff: RuleWorldEffects): 
         speed,
       });
     },
+
+    removeObject: (obj: Object) => {
+      eff.objsRemoved.add(obj.id);
+    }
   };
 }

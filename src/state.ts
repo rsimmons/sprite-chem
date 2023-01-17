@@ -266,6 +266,7 @@ export function updateAppState(state: AppState, action: Action): void {
         const anRules = analyzeRules([...state.codeState.rules.values()]);
         const eff: RuleWorldEffects = {
           objMoveEffs: new Map(),
+          objsRemoved: new Set(),
         };
         const rwi = createWorldIface(state.running.worldState, eff);
 
@@ -301,6 +302,10 @@ export function updateAppState(state: AppState, action: Action): void {
             }
           }
         }
+        for (const objId of eff.objsRemoved) {
+          state.running.worldState.objects.delete(objId);
+        }
+        // end apply effects
 
         state.running.worldState.worldTime += action.dt;
       }

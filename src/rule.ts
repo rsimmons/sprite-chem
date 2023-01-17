@@ -16,6 +16,9 @@ type RuleInput =
   } | {
     readonly type: 'kindPositions';
     readonly kindId: number;
+  } | {
+    readonly type: 'kindSizes';
+    readonly kindId: number;
   };
 
 type RuleOutput =
@@ -186,7 +189,9 @@ export const AVAILABLE_RULE_SCHEMAS: ReadonlyMap<RuleSchemaID, RuleSchema> = new
       return {
         inputs: [
           {type: 'kindPositions', kindId: kindAId},
+          {type: 'kindSizes', kindId: kindAId},
           {type: 'kindPositions', kindId: kindBId},
+          {type: 'kindSizes', kindId: kindBId},
         ],
         outputs: [
           {type: 'kindRemove', kindId: kindAId},
@@ -194,7 +199,33 @@ export const AVAILABLE_RULE_SCHEMAS: ReadonlyMap<RuleSchemaID, RuleSchema> = new
       };
     },
     apply: (args, worldIface, globalInputs) => {
-      throw new Error('unimplemented');
+      invariant(args[0].type === 'kind');
+      const kindAId = args[0].kindId;
+      invariant(args[1].type === 'kind');
+      const kindBId = args[1].kindId;
+
+      for (const objA of worldIface.iterObjectsByKindId(kindAId)) {
+        const objAPos = worldIface.getObjectPosition(objA);
+        const objARad = 0.5*worldIface.getObjectSize(objA);
+
+        let remove = false;
+
+        for (const objB of worldIface.iterObjectsByKindId(kindBId)) {
+          const objBPos = worldIface.getObjectPosition(objB);
+          const objBRad = 0.5*worldIface.getObjectSize(objB);
+
+          const dist = vec2dist(objAPos, objBPos);
+
+          if (dist < (objARad + objBRad)) {
+            remove = true;
+            break;
+          }
+        }
+
+        if (remove) {
+          worldIface.removeObject(objA);
+        }
+      }
     },
   }],
 ]);
