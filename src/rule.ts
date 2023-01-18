@@ -349,7 +349,7 @@ export const AVAILABLE_RULE_SCHEMAS: ReadonlyMap<RuleSchemaID, RuleSchema> = new
   }],
 ]);
 
-export const PARSED_SCHEMAS = new Map([...AVAILABLE_RULE_SCHEMAS.entries()].map(([schemaId, schema]) => [schemaId, parseRuleSchemaText(schema.text)]));
+export const PARSED_SCHEMAS = new Map([...AVAILABLE_RULE_SCHEMAS.values()].map(schema => [schema, parseRuleSchemaText(schema.text)]));
 
 export interface RuleInstance {
   readonly schemaId: string;

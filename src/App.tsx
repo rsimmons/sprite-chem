@@ -8,7 +8,6 @@ import { AVAILABLE_RULE_SCHEMAS, PARSED_SCHEMAS, RuleArg, RuleSchema } from './r
 import './App.css';
 
 const Rule: React.FC<{
-  schemaId: string,
   schema: RuleSchema,
   ruleId?: number,
   args?: ReadonlyArray<RuleArg | undefined>,
@@ -16,8 +15,9 @@ const Rule: React.FC<{
   onTouchStart: React.TouchEventHandler<HTMLElement>,
   dispatch?: (action: Action) => void,
   codeState: CodeState,
-}> = ({schemaId, schema, ruleId, args, onMouseDown, onTouchStart, dispatch, codeState}) => {
-  const parsed = PARSED_SCHEMAS.get(schemaId)!;
+}> = ({schema, ruleId, args, onMouseDown, onTouchStart, dispatch, codeState}) => {
+  const parsed = PARSED_SCHEMAS.get(schema);
+  invariant(parsed);
 
   return (
     <div
@@ -81,10 +81,11 @@ const Rule: React.FC<{
                       } else {
                         const arg = args[paramIdx];
                         invariant(arg && (arg.type === 'number'));
-                        invariant(ruleId);
-                        invariant(dispatch);
+                        const readOnly = ((ruleId === undefined) || (dispatch === undefined));
 
                         const handleChange = ((e: React.ChangeEvent<HTMLInputElement>) => {
+                          invariant(ruleId);
+                          invariant(dispatch);
                           dispatch({
                             type: 'setRuleArgNumber',
                             ruleId,
@@ -99,7 +100,8 @@ const Rule: React.FC<{
                             className="Rule-param-number-filled"
                             type="number"
                             value={arg.val}
-                            onChange={handleChange}
+                            onChange={readOnly ? undefined : handleChange}
+                            readOnly={readOnly}
                           />
                         );
                       }
@@ -347,6 +349,41 @@ const App: React.FC = () => {
     }
   };
 
+  const handleRuleMouseDown = (e: React.MouseEvent, ruleId: number) => {
+    e.preventDefault();
+
+    const rect = e.currentTarget.getBoundingClientRect();
+
+    dispatch({
+      type: 'touchStartRule',
+      touchId: 'mouse',
+      pos: getTouchPos(e),
+      ruleId,
+      offset: {
+        x: (e.clientX - rect.left),
+        y: (e.clientY - rect.top),
+      },
+    });
+  };
+  const handleRuleTouchStart = (e: React.TouchEvent, ruleId: number) => {
+    for (let i = 0; i < e.changedTouches.length; i++) {
+      const touch = e.changedTouches[i];
+
+      const rect = e.currentTarget.getBoundingClientRect();
+
+      dispatch({
+        type: 'touchStartRule',
+        touchId: touch.identifier,
+        pos: getTouchPos(touch),
+        ruleId,
+        offset: {
+          x: (touch.clientX - rect.left),
+          y: (touch.clientY - rect.top),
+        },
+      });
+    }
+  };
+
   const handleWindowMouseMove = (e: MouseEvent) => {
     e.preventDefault();
 
@@ -425,7 +462,6 @@ const App: React.FC = () => {
         {[...AVAILABLE_RULE_SCHEMAS.entries()].map(([schemaId, schema]) => {
           return <Rule
             key={schemaId}
-            schemaId={schemaId}
             schema={schema}
             onMouseDown={e => handleRulePaletteMouseDown(e, schemaId)}
             onTouchStart={e => handleRulePaletteTouchStart(e, schemaId)}
@@ -441,14 +477,11 @@ const App: React.FC = () => {
 
               return <Rule
                 key={ruleId}
-                schemaId={rule.schemaId}
                 schema={schema}
                 ruleId={ruleId}
                 args={rule.args}
-                onMouseDown={e => {}}
-                onTouchStart={e => {}}
-                // onMouseDown={e => handleRuleMouseDown(e, ruleId)}
-                // onTouchStart={e => handleRuleTouchStart(e, ruleId)}
+                onMouseDown={e => handleRuleMouseDown(e, ruleId)}
+                onTouchStart={e => handleRuleTouchStart(e, ruleId)}
                 dispatch={dispatch}
                 codeState={state.codeState}
               />
@@ -503,7 +536,7 @@ const App: React.FC = () => {
               const schema = AVAILABLE_RULE_SCHEMAS.get(ds.schemaId)!;
               return (
                 <div
-                  key={ds.schemaId}
+                  key={ds.touchId}
                   style={{
                     position: 'absolute',
                     left: ds.pos.x - ds.offset.x,
@@ -511,10 +544,31 @@ const App: React.FC = () => {
                   }}
                 >
                   <Rule
-                    schemaId={ds.schemaId}
                     schema={schema}
-                    onMouseDown={e => handleRulePaletteMouseDown(e, ds.schemaId)}
-                    onTouchStart={e => handleRulePaletteTouchStart(e, ds.schemaId)}
+                    onMouseDown={e => {}}
+                    onTouchStart={e => {}}
+                    codeState={state.codeState}
+                    />
+                </div>
+              );
+            }
+
+            case 'placingRule': {
+              const schema = AVAILABLE_RULE_SCHEMAS.get(ds.rule.schemaId)!;
+              return (
+                <div
+                  key={ds.touchId}
+                  style={{
+                    position: 'absolute',
+                    left: ds.pos.x - ds.offset.x,
+                    top: ds.pos.y - ds.offset.y,
+                  }}
+                >
+                  <Rule
+                    schema={schema}
+                    args={ds.rule.args}
+                    onMouseDown={e => {}}
+                    onTouchStart={e => {}}
                     codeState={state.codeState}
                     />
                 </div>

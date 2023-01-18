@@ -45,7 +45,7 @@ export function createWorldIface(ws: RunningWorldState, eff: RuleWorldEffects): 
     },
 
     setObjectMoveTowardPosition: (obj: Object, pos: Vec2, speed: number) => {
-      invariant(!eff.objMoveEffs.has(obj.id));
+      // invariant(!eff.objMoveEffs.has(obj.id)); // TODO: bring this back after we have static analysis
       eff.objMoveEffs.set(obj.id, {
         type: 'towardPos',
         pos,

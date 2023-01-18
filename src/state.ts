@@ -59,6 +59,12 @@ type DragState =
     pos: TouchPos;
     readonly offset: Vec2; // screen pixels relative to top-left corner
   } | {
+    readonly type: 'placingRule';
+    readonly touchId: TouchID;
+    pos: TouchPos;
+    readonly rule: RuleInstance;
+    readonly offset: Vec2; // screen pixels relative to top-left corner
+  } | {
     readonly type: 'onCanvasRunningBg';
     readonly touchId: TouchID;
     pos: TouchPos;
@@ -160,6 +166,12 @@ export type Action =
     readonly val: number;
   } | {
     readonly type: 'toggleRunning';
+  } | {
+    readonly type: 'touchStartRule';
+    readonly touchId: TouchID;
+    readonly pos: TouchPos;
+    readonly ruleId: number;
+    readonly offset: Vec2;
   };
 
 export function initAppState(): AppState {
@@ -434,6 +446,11 @@ export function updateAppState(state: AppState, action: Action): void {
           ds.pos = action.pos;
           break;
         }
+
+        case 'placingRule': {
+          ds.pos = action.pos;
+          break;
+        }
       }
 
       break;
@@ -499,6 +516,13 @@ export function updateAppState(state: AppState, action: Action): void {
           break;
 
         case 'onCanvasRunningBg':
+          removeDragState(ds);
+          break;
+
+        case 'placingRule':
+          if ((action.region.type === 'rules') || (action.region.type === 'ruleParam')) {
+            state.codeState.rules.set(nextSeqNum(), ds.rule);
+          }
           removeDragState(ds);
           break;
       }
@@ -608,6 +632,20 @@ export function updateAppState(state: AppState, action: Action): void {
           },
         };
       }
+      break;
+    }
+
+    case 'touchStartRule': {
+      const rule = state.codeState.rules.get(action.ruleId);
+      invariant(rule);
+      state.codeState.rules.delete(action.ruleId);
+      uist.dragStates.push({
+        type: 'placingRule',
+        touchId: action.touchId,
+        rule,
+        pos: action.pos,
+        offset: action.offset,
+      });
       break;
     }
   }
