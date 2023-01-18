@@ -4,7 +4,7 @@ import { Vec2 } from "./vec";
 
 export interface Object {
   id: number;
-  kind: Kind;
+  kindId: number;
   pos: Vec2;
   size: number; // length of longest axis in world-space
 }

@@ -1,4 +1,5 @@
-import { invariant } from "./util";
+import { getKindInitialSize } from "./rule";
+import { invariant, nextSeqNum } from "./util";
 import { Vec2 } from "./vec";
 import { Object, RunningWorldState } from "./world";
 
@@ -9,6 +10,7 @@ export interface RuleWorldIface {
   readonly getObjectPosition: (obj: ObjHandle) => Vec2;
   readonly getObjectSize: (obj: ObjHandle) => number;
   readonly setObjectMoveTowardPosition: (obj: ObjHandle, pos: Vec2, speed: number) => void;
+  readonly createObject: (kindId: number, pos: Vec2) => void;
   readonly removeObject: (obj: ObjHandle) => void;
 }
 
@@ -28,7 +30,7 @@ export function createWorldIface(ws: RunningWorldState, eff: RuleWorldEffects): 
   return {
     iterObjectsByKindId: function*(kindId: number) { // no generator arrow fns!
       for (const obj of ws.objects.values()) {
-        if (obj.kind.id === kindId) {
+        if (obj.kindId === kindId) {
           yield obj;
         }
       }
@@ -51,8 +53,18 @@ export function createWorldIface(ws: RunningWorldState, eff: RuleWorldEffects): 
       });
     },
 
+    createObject: (kindId: number, pos: Vec2) => {
+      const id = nextSeqNum();
+      ws.objects.set(id, {
+        id,
+        kindId,
+        pos,
+        size: getKindInitialSize(kindId),
+      });
+    },
+
     removeObject: (obj: Object) => {
       eff.objsRemoved.add(obj.id);
-    }
+    },
   };
 }

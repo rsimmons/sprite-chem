@@ -3,10 +3,11 @@ import { applyInvSTXform, applySTXform, pointInRect, Rect, STXform, Vec2, vec2ad
 
 import witch from './sprites/witch.png';
 import monster from './sprites/monster.png';
+import cyclops from './sprites/cyclops.png';
 import { InitWorldState, RunningWorldState } from "./world";
 import { Kind } from "./kind";
 import { Sprite, spriteFromURL } from "./sprite";
-import { analyzeRules, applyAnalyzedRules, AVAILABLE_RULE_SCHEMAS, ParsedRule, ParsedRuleItem, PARSED_SCHEMAS, RuleArg, RuleGlobalInputs, RuleInstance, RuleSchema } from "./rule";
+import { analyzeRules, applyAnalyzedRules, AVAILABLE_RULE_SCHEMAS, getKindInitialSize, ParsedRule, ParsedRuleItem, PARSED_SCHEMAS, RuleArg, RuleGlobalInputs, RuleInstance, RuleSchema } from "./rule";
 import { createWorldIface, RuleWorldEffects } from "./ruleWorldIface";
 
 export interface CodeState {
@@ -107,10 +108,6 @@ function addKind(codeState: CodeState, sprite: Sprite): CodeState {
   };
 }
 
-function getKindInitialSize(kind: Kind) {
-  return 1;
-}
-
 export type TouchID = number | 'mouse';
 
 export type Action =
@@ -198,6 +195,7 @@ export function initAppState(): AppState {
 
   addKindFromSpriteURL(state, witch);
   addKindFromSpriteURL(state, monster);
+  addKindFromSpriteURL(state, cyclops);
 
   return state;
 }
@@ -315,8 +313,7 @@ export function updateAppState(state: AppState, action: Action): void {
           case 'placingKind': {
             if (ds.sizingToWorldview) {
               const worldCanvasXform = getWorldCanvasXform(uist);
-              const kind = state.codeState.kinds.get(ds.kindId)!;
-              const targetSize = worldCanvasXform.s*uist.canvasParams.canvasScreenXform.s*getKindInitialSize(kind);
+              const targetSize = worldCanvasXform.s*uist.canvasParams.canvasScreenXform.s*getKindInitialSize(ds.kindId);
               if (ds.size !== targetSize) {
                 const RESCALE_RATE = 5;
                 const rescaleAmt = RESCALE_RATE*action.dt;
@@ -456,13 +453,12 @@ export function updateAppState(state: AppState, action: Action): void {
         case 'placingKind': {
           if (action.region.type === 'canvas') {
             const worldCanvasXform = getWorldCanvasXform(uist);
-            const kind = state.codeState.kinds.get(ds.kindId)!;
-            const size = getKindInitialSize(kind);
+            const size = getKindInitialSize(ds.kindId);
             const worldPos = vec2sub(applyInvSTXform(worldCanvasXform, applyInvSTXform(uist.canvasParams.canvasScreenXform, ds.pos)), vec2scale(ds.offset, size));
             const oid = nextSeqNum();
             state.codeState.initWorldState.objects.set(oid, {
               id: oid,
-              kind,
+              kindId: ds.kindId,
               pos: worldPos,
               size,
             });
@@ -541,7 +537,7 @@ export function updateAppState(state: AppState, action: Action): void {
           const objects = state.codeState.initWorldState.objects;
           const objId = hit.objId;
           const obj = objects.get(objId)!;
-          const kindId = obj.kind.id;
+          const kindId = obj.kindId;
           objects.delete(objId);
 
           const worldCanvasXform = getWorldCanvasXform(uist);
@@ -604,7 +600,7 @@ export function updateAppState(state: AppState, action: Action): void {
               const newId = nextSeqNum();
               return [newId, {
                 id: newId,
-                kind: obj.kind,
+                kindId: obj.kindId,
                 pos: obj.pos,
                 size: obj.size,
               }];
@@ -662,7 +658,8 @@ export function renderCanvas(state: AppState, canvas: HTMLCanvasElement) {
   objects.forEach((obj, objId) => {
     const pos = applySTXform(worldCanvasXform, obj.pos);
     const size = worldCanvasXform.s*obj.size;
-    const rect = drawSprite(ctx, obj.kind.sprite, pos, size);
+    const kind = state.codeState.kinds.get(obj.kindId)!;
+    const rect = drawSprite(ctx, kind.sprite, pos, size);
     newHitTargets.push({
       rect,
       objId,

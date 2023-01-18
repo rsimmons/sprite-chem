@@ -29,6 +29,9 @@ type RuleOutput =
     readonly type: 'kindSize';
     readonly kindId: number;
   } | {
+    readonly type: 'kindCreate';
+    readonly kindId: number;
+  } | {
     readonly type: 'kindRemove';
     readonly kindId: number;
   };
@@ -174,6 +177,58 @@ export const AVAILABLE_RULE_SCHEMAS: ReadonlyMap<RuleSchemaID, RuleSchema> = new
     },
   }],
 
+  ['kindMoveTowardNearestKindAtSpeed', {
+    text: '{0|A} moves toward nearest {1|B}\nat speed {2|S}',
+    params: [
+      {type: 'kind'},
+      {type: 'kind'},
+      {type: 'number', defaultVal: 5},
+    ],
+    getIO: (args) => {
+      invariant(args[0].type === 'kind');
+      const kindAId = args[0].kindId;
+      invariant(args[1].type === 'kind');
+      const kindBId = args[1].kindId;
+
+      return {
+        inputs: [
+          {type: 'kindPositions', kindId: kindAId},
+          {type: 'kindPositions', kindId: kindBId},
+        ],
+        outputs: [
+          {type: 'kindMoveTowardPosition', kindId: kindAId},
+        ],
+      };
+    },
+    apply: (args, worldIface, globalInputs) => {
+      invariant(args[0].type === 'kind');
+      const kindAId = args[0].kindId;
+      invariant(args[1].type === 'kind');
+      const kindBId = args[1].kindId;
+      invariant(args[2].type === 'number');
+      const speed = args[2].val;
+
+      for (const objA of worldIface.iterObjectsByKindId(kindAId)) {
+        const objAPos = worldIface.getObjectPosition(objA);
+
+        let nearestDist = undefined;
+        let nearestPos = undefined;
+        for (const objB of worldIface.iterObjectsByKindId(kindBId)) {
+          const objBPos = worldIface.getObjectPosition(objB);
+          const dist = vec2dist(objAPos, objBPos);
+          if ((nearestDist === undefined) || (dist < nearestDist)) {
+            nearestDist = dist;
+            nearestPos = objBPos;
+          }
+        }
+        if (nearestDist !== undefined) {
+          invariant(nearestPos !== undefined);
+          worldIface.setObjectMoveTowardPosition(objA, nearestPos, speed);
+        }
+      }
+    },
+  }],
+
   ['kindRemovedWhenTouchesKind', {
     text: '{0|A} is removed when it touches {1|B}',
     params: [
@@ -228,6 +283,70 @@ export const AVAILABLE_RULE_SCHEMAS: ReadonlyMap<RuleSchemaID, RuleSchema> = new
       }
     },
   }],
+
+  ['kindBecomesKindWhenTouchesKind', {
+    text: '{0|A} becomes a {1|B} when it touches a {2|C}',
+    params: [
+      {type: 'kind'},
+      {type: 'kind'},
+      {type: 'kind'},
+    ],
+    getIO: (args) => {
+      invariant(args[0].type === 'kind');
+      const kindAId = args[0].kindId;
+      invariant(args[1].type === 'kind');
+      const kindBId = args[1].kindId;
+      invariant(args[2].type === 'kind');
+      const kindCId = args[2].kindId;
+
+      return {
+        inputs: [
+          {type: 'kindPositions', kindId: kindAId},
+          {type: 'kindSizes', kindId: kindAId},
+          {type: 'kindPositions', kindId: kindBId},
+          {type: 'kindSizes', kindId: kindBId},
+          {type: 'kindPositions', kindId: kindCId},
+          {type: 'kindSizes', kindId: kindCId},
+        ],
+        outputs: [
+          {type: 'kindRemove', kindId: kindAId},
+          {type: 'kindCreate', kindId: kindBId},
+        ],
+      };
+    },
+    apply: (args, worldIface, globalInputs) => {
+      invariant(args[0].type === 'kind');
+      const kindAId = args[0].kindId;
+      invariant(args[1].type === 'kind');
+      const kindBId = args[1].kindId;
+      invariant(args[2].type === 'kind');
+      const kindCId = args[2].kindId;
+
+      for (const objA of worldIface.iterObjectsByKindId(kindAId)) {
+        const objAPos = worldIface.getObjectPosition(objA);
+        const objARad = 0.5*worldIface.getObjectSize(objA);
+
+        let change = false;
+
+        for (const objC of worldIface.iterObjectsByKindId(kindCId)) {
+          const objCPos = worldIface.getObjectPosition(objC);
+          const objCRad = 0.5*worldIface.getObjectSize(objC);
+
+          const dist = vec2dist(objAPos, objCPos);
+
+          if (dist < (objARad + objCRad)) {
+            change = true;
+            break;
+          }
+        }
+
+        if (change) {
+          worldIface.removeObject(objA);
+          worldIface.createObject(kindBId, objAPos);
+        }
+      }
+    },
+  }],
 ]);
 
 export const PARSED_SCHEMAS = new Map([...AVAILABLE_RULE_SCHEMAS.entries()].map(([schemaId, schema]) => [schemaId, parseRuleSchemaText(schema.text)]));
@@ -237,18 +356,23 @@ export interface RuleInstance {
   readonly args: Array<RuleArg | undefined>;
 }
 
-export interface ValidatedRuleInstance {
+export interface AnalyzedRuleInstance {
   readonly schemaId: string;
   readonly args: Array<RuleArg>;
 }
 
 export interface RulesAnalysis {
-  readonly sortedRules: ReadonlyArray<ValidatedRuleInstance>;
+  readonly sortedRules: ReadonlyArray<AnalyzedRuleInstance>;
+}
+
+// TODO: this should eventually take RulesAnalysis I think
+export function getKindInitialSize(kindId: number) {
+  return 1;
 }
 
 export function analyzeRules(rules: ReadonlyArray<RuleInstance>): RulesAnalysis {
   // TODO: topological sort, etc.
-  const sortedRules: Array<ValidatedRuleInstance> = [];
+  const sortedRules: Array<AnalyzedRuleInstance> = [];
   for (const rule of rules) {
     if (rule.args.every(arg => (arg !== undefined))) {
       sortedRules.push({
