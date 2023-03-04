@@ -37,3 +37,26 @@ export function nodeIsAncestor(a: Node, b: Node): boolean {
   }
   return false;
 }
+
+export interface ClientXY {
+  readonly clientX: number;
+  readonly clientY: number;
+}
+
+export function arrRemoveElemByValue<T>(arr: ReadonlyArray<T>, v: T): Array<T> {
+  const idx = arr.indexOf(v);
+  if (idx < 0) {
+    throw new Error('did not find value in array');
+  }
+
+  return arr.slice(0, idx).concat(arr.slice(idx+1));
+}
+
+export function arrReplaceElemByValue<T>(arr: ReadonlyArray<T>, v: T, newV: T): Array<T> {
+  const idx = arr.indexOf(v);
+  if (idx < 0) {
+    throw new Error('did not find value in array');
+  }
+
+  return arr.slice(0, idx).concat([newV], arr.slice(idx+1));
+}
