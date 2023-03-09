@@ -22,11 +22,22 @@ const PoolTabPanel = <T,>({evs, type, dispatch}: PoolTabPanelProps<T>): ReactEle
     }
 
     if (e.target.hasPointerCapture(e.pointerId)) {
-      console.log('released capture');
       e.target.releasePointerCapture(e.pointerId);
     }
 
-    const rect = e.target.getBoundingClientRect();
+    // find the nearest ancestor that's the container, so calculating offset
+    let containerElem = e.target;
+    while (true) {
+      if (containerElem.classList.contains('PoolTabPanel-preview-container')) {
+        break;
+      }
+      if (containerElem.parentElement) {
+        containerElem = containerElem.parentElement;
+      } else {
+        throw new Error('did not find container elem');
+      }
+    }
+    const rect = containerElem.getBoundingClientRect();
     const maxDim = Math.max(rect.width, rect.height);
 
     dispatch({
@@ -39,8 +50,8 @@ const PoolTabPanel = <T,>({evs, type, dispatch}: PoolTabPanelProps<T>): ReactEle
       },
       size: maxDim,
       offset: {
-        x: Math.floor((e.clientX - rect.left)/maxDim),
-        y: Math.floor((e.clientY - rect.top)/maxDim),
+        x: (e.clientX - rect.left)/maxDim,
+        y: (e.clientY - rect.top)/maxDim,
       },
     });
   };
