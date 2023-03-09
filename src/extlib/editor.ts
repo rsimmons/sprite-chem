@@ -1,6 +1,6 @@
 import { EVID, EVType, PointerID } from "./common";
 
-interface EditorContext<T> {
+export interface EditorContext<T> {
   /**
    * The container element that the editor is to install itself into.
    * The container is expected to be a block container and to have
@@ -9,19 +9,14 @@ interface EditorContext<T> {
   readonly container: HTMLElement;
 
   /**
-   * Defined iff the editor is being loaded from previously saved state
+   * The initial underlying value this editor is editing
    */
-  readonly init?: {
-    /**
-     * The underlying value this editor is editing
-     */
-    readonly initValue: T;
+  readonly initValue: T;
 
-    /**
-     * Initial values of any EVs the editor depends on
-     */
-    readonly initDepVals: ReadonlyMap<EVID, any>;
-  }
+  /**
+   * Initial values of any EVs the editor depends on
+   */
+  readonly initDepVals: ReadonlyMap<EVID, any>;
 
   /**
    * The editor should call this to report that the EV that it's editing
@@ -42,22 +37,17 @@ interface EditorContext<T> {
   readonly beginEVDrag: (id: EVID, event: MouseEvent|TouchEvent) => void;
 }
 
-interface EditorReturn<T> {
-  /**
-   * The initial value of the EV that's being edited by this editor
-   */
-  readonly initialValue: T;
-
+export interface EditorReturn<T> {
   /**
    * A function to notify the editor that an EV it depends on has a new value.
    */
   readonly depChanged?: (id: EVID, value: any) => void;
 
   /**
-   * TODO: Sort out these functions that allow editor to receive drags
+   * These allow editor to receive EV drags
    */
-  readonly checkEVDrag?: (type: EVType, value: any, event: MouseEvent|TouchEvent) => boolean;
-  readonly endEVDrag?: (type: EVType, value: any, event: MouseEvent|TouchEvent) => void;
+  readonly checkEVDrag?: (type: EVType, id: EVID, curValue: any, event: MouseEvent|TouchEvent) => boolean;
+  readonly endEVDrag?: (type: EVType, id: EVID, curValue: any, event: MouseEvent|TouchEvent) => void;
 
   /**
    * A function to tell the editor to clean up before it is removed from

@@ -1,17 +1,19 @@
-import React, { useEffect, useReducer, useState } from 'react';
+import React, { useEffect, useReducer, useRef, useState } from 'react';
 
 import PoolTabPanel from './PoolTabPanel';
 import { PointerID } from './extlib/common';
 import { ClientXY, invariant } from './util';
-import { INIT_STATE, reducer } from './newState';
-import Preview from './Preview';
-import { vec2scale, vec2sub } from './vec';
+import { DragState, INIT_STATE, reducer } from './newState';
+import EditorContainer from './EditorContainer';
+import PreviewerContainer from './PreviewerContainer';
+import { Vec2, vec2scale, vec2sub } from './vec';
+import { TEMPLATE } from './config';
+import { AttachedDragData } from './common';
 import './NewApp.css';
 
 import witch from './sprites/witch.png';
 import monster from './sprites/monster.png';
 import cyclops from './sprites/cyclops.png';
-import { TEMPLATE } from './config';
 
 const App: React.FC = () => {
   const [state, dispatch] = useReducer(reducer, INIT_STATE);
@@ -26,63 +28,54 @@ const App: React.FC = () => {
     })();
   }, []);
 
-  const handlePointerMove = (pointerId: PointerID, pos: ClientXY): void => {
+  const handlePointerMoveUp = (e: PointerEvent, type: 'pointerMove'|'pointerUp') => {
     dispatch({
-      type: 'pointerMove',
-      pointerId,
+      type,
+      pointerId: e.pointerId,
       pos: {
-        x: pos.clientX,
-        y: pos.clientY,
+        x: e.clientX,
+        y: e.clientY,
       },
     });
+  }
+  const handlePointerMove = (e: PointerEvent) => {
+    handlePointerMoveUp(e, 'pointerMove');
   };
-  const handleWindowMouseMove = (e: MouseEvent) => {
-    e.preventDefault();
-
-    handlePointerMove('mouse', e);
+  const handlePointerUp = (e: PointerEvent) => {
+    handlePointerMoveUp(e, 'pointerUp');
   };
-  const handleWindowTouchMove = (e: TouchEvent) => {
-    for (let i = 0; i < e.changedTouches.length; i++) {
-      const touch = e.changedTouches[i];
 
-      handlePointerMove(touch.identifier, touch);
+  const attachDragData = (pointerId: PointerID, e: any): void => {
+    const matchDragStates = state.dragStates.filter(s => (s.pointerId === pointerId));
+    if (matchDragStates.length === 1) {
+      const ds = matchDragStates[0];
+      const dd: AttachedDragData = {
+        type: ds.type,
+        evId: ds.evId,
+      };
+      e.draggingEV = dd;
+    } else {
+      invariant(matchDragStates.length === 0);
     }
   };
-
-  const handlePointerEnd = (pointerId: PointerID, pos: ClientXY): void => {
-    dispatch({
-      type: 'pointerEnd',
-      pointerId,
-      pos: {
-        x: pos.clientX,
-        y: pos.clientY,
-      },
-    });
+  const handlePointerMoveCapture = (e: PointerEvent) => {
+    attachDragData(e.pointerId, e);
   };
-  const handleWindowMouseUp = (e: MouseEvent) => {
-    e.preventDefault();
-
-    handlePointerEnd('mouse', e);
-  };
-  const handleWindowTouchEnd = (e: TouchEvent) => {
-    for (let i = 0; i < e.changedTouches.length; i++) {
-      const touch = e.changedTouches[i];
-
-      handlePointerEnd(touch.identifier, touch);
-    }
+  const handlePointerUpCapture = (e: PointerEvent) => {
+    attachDragData(e.pointerId, e);
   };
 
   useEffect(() => {
-    window.addEventListener('mousemove', handleWindowMouseMove, false);
-    window.addEventListener('mouseup', handleWindowMouseUp, false);
-    window.addEventListener('touchmove', handleWindowTouchMove, false);
-    window.addEventListener('touchend', handleWindowTouchEnd, false);
+   window.addEventListener('pointermove', handlePointerMove, false);
+   window.addEventListener('pointerup', handlePointerUp, false);
+   window.addEventListener('pointermove', handlePointerMoveCapture, true);
+   window.addEventListener('pointerup', handlePointerUpCapture, true);
 
     return () => {
-      window.removeEventListener('mousemove', handleWindowMouseMove, false);
-      window.removeEventListener('mouseup', handleWindowMouseUp, false);
-      window.removeEventListener('touchmove', handleWindowTouchMove, false);
-      window.removeEventListener('touchend', handleWindowTouchEnd, false);
+      window.removeEventListener('pointermove', handlePointerMove, false);
+      window.removeEventListener('pointerup', handlePointerUp, false);
+      window.removeEventListener('pointermove', handlePointerMoveCapture, true);
+      window.removeEventListener('pointerup', handlePointerUpCapture, true);
     };
   });
 
@@ -98,14 +91,20 @@ const App: React.FC = () => {
     });
   };
 
-  const [activeTabId, setActiveTabId] = useState(TEMPLATE.tabs[0].id);
+  const [activeTabId, setActiveTabId] = useState(TEMPLATE.tabs[0].tabId);
+
+  const stoppedEditorEVId = state.singles.get(TEMPLATE.outputPanel.stoppedEditor.globalId);
+  invariant(stoppedEditorEVId);
+  const stoppedEditorEV = state.evs.get(stoppedEditorEVId);
+  invariant(stoppedEditorEV);
+  invariant(stoppedEditorEV.type === TEMPLATE.outputPanel.stoppedEditor.type);
 
   return (
     <div className="App">
       <div className="App-output-rest">
         <div className="App-header">
           <div className="App-tab-links">{TEMPLATE.tabs.map(tab => {
-            return <a key={tab.id} className={'App-tab-link ' + ((tab.id === activeTabId) ? 'App-tab-link-active' : 'App-tab-link-inactive')} href="#tab" onClick={(e) => handleTabLinkClick(e, tab.id)}>{tab.name}</a>
+            return <a key={tab.tabId} className={'App-tab-link ' + ((tab.tabId === activeTabId) ? 'App-tab-link-active' : 'App-tab-link-inactive')} href="#tab" onClick={(e) => handleTabLinkClick(e, tab.tabId)}>{tab.name}</a>
           })}</div>
           <div className="App-run-controls">
             <button onClick={handleRunningToggleClick}>
@@ -115,16 +114,16 @@ const App: React.FC = () => {
         </div>
         <div className="App-tab-area">{TEMPLATE.tabs.map(tab => {
           return (
-            <div key={tab.id} className={'App-tab-container ' + ((tab.id === activeTabId) ? 'App-tab-container-active' : 'App-tab-container-inactive')}>{
+            <div key={tab.tabId} className={'App-tab-container ' + ((tab.tabId === activeTabId) ? 'App-tab-container-active' : 'App-tab-container-inactive')}>{
               (() => {
                 switch (tab.kind) {
                   case 'empty':
                     return null;
 
                   case 'pool': {
-                    const pool = TEMPLATE.pools.find(p => (p.id === tab.pool));
+                    const pool = TEMPLATE.pools.find(p => (p.globalId === tab.globalId));
                     invariant(pool);
-                    const poolEVIds = state.pools.get(pool.id);
+                    const poolEVIds = state.pools.get(pool.globalId);
                     invariant(poolEVIds);
                     return <PoolTabPanel evs={poolEVIds.map(evid => [evid, state.evs.get(evid)!.val])} type={pool.type} dispatch={dispatch} />
                   }
@@ -136,7 +135,17 @@ const App: React.FC = () => {
         })}
         </div>
       </div>
-      <div className="App-output">
+      <div className="App-output-area">
+        <div className={'App-output-stopped-editor ' + (state.running ? 'App-output-stopped-editor-inactive' : 'App-output-stopped-editor-active')}>
+          <EditorContainer
+            type={stoppedEditorEV.type}
+            initValue={stoppedEditorEV.val}
+            onChange={(newVal) => { console.log('editor reported new value', newVal) }}
+          />
+        </div>
+        <div className={'App-output-runner ' + (state.running ? 'App-output-runner-inactive' : 'App-output-runner-active')}>
+          runner output
+        </div>
       </div>
       <div className="App-drags">
         {state.dragStates.map(ds => {
@@ -154,10 +163,9 @@ const App: React.FC = () => {
                     top: adjPos.y,
                     width: `${ds.size}px`,
                     height: `${ds.size}px`,
-                    // transform: 'translate(-50%, -50%)',
                   }}
                 >
-                  <Preview type={ev.type} value={ev.val} />
+                  <PreviewerContainer type={ev.type} value={ev.val} />
                 </div>
               );
             }

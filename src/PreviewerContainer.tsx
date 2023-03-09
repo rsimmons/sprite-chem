@@ -1,19 +1,19 @@
 import { ReactElement, useEffect, useRef } from "react";
-import { PreviewerReturn } from "./extlib/previewer";
+import { Previewer, PreviewerReturn } from "./extlib/previewer";
 import { invariant } from "./util";
 import { EXTENSION_MAP, TEMPLATE } from "./config";
 import { EVType } from "./extlib/common";
-import './Preview.css';
+import './PreviewerContainer.css';
 
-interface PoolTabPanelProps<T> {
+interface PreviewerContainerProps<T> {
   readonly type: EVType;
   readonly value: T;
 }
 
-const Preview = <T,>({type, value}: PoolTabPanelProps<T>): ReactElement => {
-  const previewerExtentionId = TEMPLATE.previewers[type];
-  invariant(previewerExtentionId);
-  const previewer = EXTENSION_MAP.get(previewerExtentionId);
+const PreviewerContainer = <T,>({type, value}: PreviewerContainerProps<T>): ReactElement => {
+  const previewerExtensionId = TEMPLATE.previewers[type];
+  invariant(previewerExtensionId);
+  const previewer = EXTENSION_MAP.get(previewerExtensionId) as Previewer<T>;
   invariant(previewer);
 
   const containerRef = useRef<HTMLDivElement>(null);
@@ -40,7 +40,7 @@ const Preview = <T,>({type, value}: PoolTabPanelProps<T>): ReactElement => {
     };
   }, [value, previewer]);
 
-  return <div ref={containerRef} className="Preview" />;
+  return <div ref={containerRef} className="PreviewerContainer" />;
 }
 
-export default Preview;
+export default PreviewerContainer;

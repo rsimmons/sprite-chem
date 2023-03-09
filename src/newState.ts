@@ -1,9 +1,11 @@
+import { EXTENSION_MAP, TEMPLATE } from "./config";
 import { Sprite } from "./extensions/types/sprite";
 import { EVID, EVType, PointerID } from "./extlib/common";
+import { Creator } from "./extlib/creator";
 import { arrRemoveElemByValue, arrReplaceElemByValue, genUidRandom, invariant } from "./util";
 import { Vec2 } from "./vec";
 
-type DragState =
+export type DragState =
   {
     // has not yet "detached"
     readonly type: 'detachingEV';
@@ -23,21 +25,40 @@ type DragState =
   };
 
 interface AppState {
-  readonly running: boolean;
   readonly evs: ReadonlyMap<EVID, {
     readonly type: EVType;
     readonly val: any;
   }>;
+  readonly singles: ReadonlyMap<string, EVID>;
   readonly pools: ReadonlyMap<string, ReadonlyArray<EVID>>;
+
+  readonly running: boolean;
   readonly dragStates: ReadonlyArray<DragState>;
 }
 
+const stoppedEditorType = TEMPLATE.outputPanel.stoppedEditor.type;
+const stoppedEditorInitValCreatorExtId = TEMPLATE.creators[stoppedEditorType]![0];
+invariant(stoppedEditorInitValCreatorExtId);
+const stoppedEditorInitValCreator = EXTENSION_MAP.get(stoppedEditorInitValCreatorExtId) as Creator<any, void>;
+invariant(stoppedEditorInitValCreator);
+const stoppedEditorEVId = genUidRandom();
+const stoppedEditorInitVal = stoppedEditorInitValCreator.create();
+
 export const INIT_STATE: AppState = {
-  running: false,
-  evs: new Map(),
+  evs: new Map([
+    [stoppedEditorEVId, {
+      type: stoppedEditorType,
+      val: stoppedEditorInitVal,
+    }],
+  ]),
+  singles: new Map([
+    [TEMPLATE.outputPanel.stoppedEditor.globalId, stoppedEditorEVId],
+  ]),
   pools: new Map([
     ['sprites', []],
   ]),
+
+  running: false,
   dragStates: [],
 };
 
@@ -53,11 +74,11 @@ export type AppAction =
     readonly pointerId: PointerID;
     readonly pos: Vec2;
   } | {
-    readonly type: 'pointerEnd';
+    readonly type: 'pointerUp';
     readonly pointerId: PointerID;
     readonly pos: Vec2;
   } | {
-    readonly type: 'pointerStartOnEV';
+    readonly type: 'pointerDownOnEV';
     readonly pointerId: PointerID;
     readonly evId: EVID;
     readonly pos: Vec2;
@@ -105,8 +126,12 @@ export function reducer(state: AppState, action: AppAction): AppState {
       };
     }
 
-    case 'toggleRunning':
-      return state;
+    case 'toggleRunning': {
+      return {
+        ...state,
+        running: !state.running,
+      };
+    }
 
     case 'pointerMove': {
       const ds = findMatchingDragState(action.pointerId);
@@ -151,7 +176,7 @@ export function reducer(state: AppState, action: AppAction): AppState {
       throw new Error('should be unreachable');
     }
 
-    case 'pointerEnd': {
+    case 'pointerUp': {
       const ds = findMatchingDragState(action.pointerId);
       if (!ds) {
         return state;
@@ -163,7 +188,7 @@ export function reducer(state: AppState, action: AppAction): AppState {
       };
     }
 
-    case 'pointerStartOnEV': {
+    case 'pointerDownOnEV': {
       return {
         ...state,
         dragStates: state.dragStates.concat([{

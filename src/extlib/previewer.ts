@@ -1,4 +1,4 @@
-interface PreviewerContext<T> {
+export interface PreviewerContext<T> {
   readonly container: HTMLElement;
   readonly initialValue: T;
 }

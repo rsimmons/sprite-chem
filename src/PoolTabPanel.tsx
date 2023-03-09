@@ -1,6 +1,6 @@
 import { ReactElement } from 'react';
 import { EVID, EVType, PointerID } from './extlib/common';
-import Preview from './Preview';
+import PreviewerContainer from './PreviewerContainer';
 import { ClientXY } from './util';
 import { AppDispatch } from './newState';
 import './PoolTabPanel.css';
@@ -13,36 +13,36 @@ interface PoolTabPanelProps<T> {
 }
 
 const PoolTabPanel = <T,>({evs, type, dispatch}: PoolTabPanelProps<T>): ReactElement => {
-  const handlePointerStart = (evId: EVID, pointerId: PointerID, target: Element, pos: ClientXY): void => {
-    const rect = target.getBoundingClientRect();
+  const handlePointerDown = (e: React.PointerEvent, evId: string) => {
+    e.preventDefault();
+
+    // release capture if we implicitly got it (happens with touch by default)
+    if (!(e.target instanceof HTMLElement)) {
+      throw new Error('unclear if this can happen');
+    }
+
+    if (e.target.hasPointerCapture(e.pointerId)) {
+      console.log('released capture');
+      e.target.releasePointerCapture(e.pointerId);
+    }
+
+    const rect = e.target.getBoundingClientRect();
     const maxDim = Math.max(rect.width, rect.height);
 
     dispatch({
-      type: 'pointerStartOnEV',
-      pointerId,
+      type: 'pointerDownOnEV',
+      pointerId: e.pointerId,
       evId,
       pos: {
-        x: pos.clientX,
-        y: pos.clientY,
+        x: e.clientX,
+        y: e.clientY,
       },
       size: maxDim,
       offset: {
-        x: (pos.clientX - rect.left)/maxDim,
-        y: (pos.clientY - rect.top)/maxDim,
+        x: Math.floor((e.clientX - rect.left)/maxDim),
+        y: Math.floor((e.clientY - rect.top)/maxDim),
       },
     });
-  };
-  const handleListItemMouseDown = (e: React.MouseEvent, evId: string) => {
-    e.preventDefault();
-
-    handlePointerStart(evId, 'mouse', e.currentTarget, e);
-  };
-  const handleListItemTouchStart = (e: React.TouchEvent, evId: string) => {
-    for (let i = 0; i < e.changedTouches.length; i++) {
-      const touch = e.changedTouches[i];
-
-      handlePointerStart(evId, touch.identifier, e.currentTarget, touch);
-    }
   };
 
   return (
@@ -52,10 +52,9 @@ const PoolTabPanel = <T,>({evs, type, dispatch}: PoolTabPanelProps<T>): ReactEle
           <div
             key={evId}
             className="PoolTabPanel-preview-container"
-            onMouseDown={e => handleListItemMouseDown(e, evId)}
-            onTouchStart={e => handleListItemTouchStart(e, evId)}
+            onPointerDown={e => handlePointerDown(e, evId)}
           >
-            <Preview type={type} value={val} />
+            <PreviewerContainer type={type} value={val} />
           </div>
         );
       })}

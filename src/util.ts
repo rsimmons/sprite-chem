@@ -43,6 +43,22 @@ export interface ClientXY {
   readonly clientY: number;
 }
 
+export function getElemByPosData(p: ClientXY, prop: string): HTMLElement | undefined {
+  const elem = document.elementFromPoint(p.clientX, p.clientY);
+
+  if (elem) {
+    let n: Node | null = elem;
+    while (n) {
+      if ((n instanceof HTMLElement) && (n.dataset[prop])) {
+        return n as HTMLElement;
+      }
+      n = n.parentNode;
+    }
+  }
+
+  return undefined;
+}
+
 export function arrRemoveElemByValue<T>(arr: ReadonlyArray<T>, v: T): Array<T> {
   const idx = arr.indexOf(v);
   if (idx < 0) {

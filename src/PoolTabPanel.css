@@ -4,15 +4,19 @@
   display: flex;
 }
 
+/* NOTE: When this used flex, there was horrible layout performance in Safari.
+It had something to do with previews having img elements where the src was
+data URIs. The easiest fix seemed to be making this not flex. */
 .PoolTabPanel-list {
   border-right: 1px solid #ccc;
-  display: flex;
-  flex-direction: column;
   padding: 1em;
-  gap: 1em;
   overflow-x: hidden;
   overflow-y: auto;
   touch-action: pan-y;
+}
+
+.PoolTabPanel-list > *:not(:last-child) {
+  margin-bottom: 1em;
 }
 
 .PoolTabPanel-editor {
@@ -22,5 +26,4 @@
 .PoolTabPanel-preview-container {
   width: 6em;
   height: 6em;
-  flex: 0 0 auto;
 }
