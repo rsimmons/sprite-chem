@@ -4,7 +4,6 @@ import { genUidRandom, invariant } from './util';
 import { EXTENSION_MAP, TEMPLATE } from './config';
 import { Editor, EditorReturn } from './extlib/editor';
 import './EditorContainer.css';
-import { AttachedDragData } from './common';
 
 interface EditorContainerProps<T> {
   readonly type: EVType;
@@ -30,10 +29,9 @@ const EditorContainer = <T,>({type, initValue, onChange}: EditorContainerProps<T
         container: containerRef.current,
         initValue,
         initDepVals: new Map(),
-        valueChanged: (value) => { onChange(value) },
-        addDep: (id) => { throw new Error('unimplemented'); },
-        removeDep: (id) => { throw new Error('unimplemented'); },
-        beginEVDrag: (id, event) => { throw new Error('unimplemented'); },
+        valueChanged: (value) => { onChange(value); },
+        addDep: (id) => { },
+        removeDep: (id) => { },
       });
       editorReturnRef.current = ret;
     }
@@ -47,17 +45,9 @@ const EditorContainer = <T,>({type, initValue, onChange}: EditorContainerProps<T
     };
   }, [editor]);
 
-  const handlePointerMove = (e: React.PointerEvent) => {
-    const dragData = (e.nativeEvent as any).draggingEV as (AttachedDragData | undefined);
-    if (dragData) {
-      console.log(dragData);
-    }
-  };
-
   return <div
     ref={containerRef}
     className="EditorContainer"
-    onPointerMove={handlePointerMove}
   />;
 }
 

@@ -16,3 +16,12 @@ export interface LoaderSaver<T> {
 export type PointerID = 'mouse' | number;
 
 export type ExtensionID = string;
+
+// attached to DOM events pointermove, pointerup
+export interface AttachedDragData {
+  readonly evId: EVID;
+  readonly type: EVType;
+  readonly value: any;
+  readonly size: number;
+  readonly offset: {x: number, y: number};
+}

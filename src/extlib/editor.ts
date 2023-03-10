@@ -30,11 +30,6 @@ export interface EditorContext<T> {
    */
   readonly addDep: (id: EVID) => void;
   readonly removeDep: (id: EVID) => void;
-
-  /**
-   * Begin dragging an EV from the editor
-   */
-  readonly beginEVDrag: (id: EVID, event: MouseEvent|TouchEvent) => void;
 }
 
 export interface EditorReturn<T> {
@@ -42,12 +37,6 @@ export interface EditorReturn<T> {
    * A function to notify the editor that an EV it depends on has a new value.
    */
   readonly depChanged?: (id: EVID, value: any) => void;
-
-  /**
-   * These allow editor to receive EV drags
-   */
-  readonly checkEVDrag?: (type: EVType, id: EVID, curValue: any, event: MouseEvent|TouchEvent) => boolean;
-  readonly endEVDrag?: (type: EVType, id: EVID, curValue: any, event: MouseEvent|TouchEvent) => void;
 
   /**
    * A function to tell the editor to clean up before it is removed from

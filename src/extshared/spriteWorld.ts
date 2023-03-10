@@ -1,18 +1,30 @@
 import { invariant } from "../util";
 import { Vec2 } from "../vec";
 
-export interface Instance {
-  id: number;
-  spriteId: number;
-  pos: Vec2;
-  size: number; // length of longest axis in world-space
+export interface SpriteInstances {
+  bitmap: ImageBitmap;
+
+  // [0-1] relative to max dimension
+  scaledWidth: number;
+  scaledHeight: number;
+
+  instances: ReadonlyArray<{
+    pos: Vec2; // center of sprite
+    size: number; // length of longest axis in world-space
+  }>;
 }
 
 export interface RenderableState {
-  instances: Map<number, Instance>; // TODO: convert to SoA?
+  instances: ReadonlyMap<string, SpriteInstances>;
 }
 
-export function createRenderCanvas(container: HTMLElement, getState: () => RenderableState): () => void {
+interface CreateRenderCanvasReturn {
+  readonly cleanup: () => void;
+  readonly canvas: HTMLElement;
+  readonly pixelScale: number;
+}
+
+export function createRenderCanvas(container: HTMLElement, getState: () => RenderableState): CreateRenderCanvasReturn {
   const USE_HIDPI = true;
   const pixelScale = USE_HIDPI ? window.devicePixelRatio : 1;
 
@@ -43,6 +55,17 @@ export function createRenderCanvas(container: HTMLElement, getState: () => Rende
 
     ctx.clearRect(0, 0, canvasWidth, canvasHeight);
 
+    const state = getState();
+    state.instances.forEach((insts, spriteId) => {
+      for (const inst of insts.instances) {
+        const width = inst.size*insts.scaledWidth;
+        const height = inst.size*insts.scaledHeight;
+        const left = inst.pos.x - 0.5*width;
+        const top = inst.pos.y - 0.5*height;
+        ctx.drawImage(insts.bitmap, left, top, width, height);
+      }
+    });
+
     // sanity check that we have canvas dims correct
     ctx.fillRect(canvasWidth-15, canvasHeight-15, 10, 10);
   };
@@ -66,7 +89,11 @@ export function createRenderCanvas(container: HTMLElement, getState: () => Rende
   let rafId = requestAnimationFrame(frameCallback);
   let prevTime: number | undefined = undefined;
 
-  return () => {
-    cancelAnimationFrame(rafId);
+  return {
+    cleanup: () => {
+      cancelAnimationFrame(rafId);
+    },
+    canvas,
+    pixelScale,
   };
 }

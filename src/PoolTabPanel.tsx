@@ -4,6 +4,7 @@ import PreviewerContainer from './PreviewerContainer';
 import { ClientXY } from './util';
 import { AppDispatch } from './newState';
 import './PoolTabPanel.css';
+import { Vec2 } from './vec';
 
 // T is the underlying value type of the pool items
 interface PoolTabPanelProps<T> {
@@ -25,7 +26,7 @@ const PoolTabPanel = <T,>({evs, type, dispatch}: PoolTabPanelProps<T>): ReactEle
       e.target.releasePointerCapture(e.pointerId);
     }
 
-    // find the nearest ancestor that's the container, so calculating offset
+    // find the nearest ancestor that's the container, for calculating offset
     let containerElem = e.target;
     while (true) {
       if (containerElem.classList.contains('PoolTabPanel-preview-container')) {
@@ -39,6 +40,10 @@ const PoolTabPanel = <T,>({evs, type, dispatch}: PoolTabPanelProps<T>): ReactEle
     }
     const rect = containerElem.getBoundingClientRect();
     const maxDim = Math.max(rect.width, rect.height);
+    const offset: Vec2 = {
+      x: (e.clientX - rect.left)/maxDim,
+      y: (e.clientY - rect.top)/maxDim,
+    };
 
     dispatch({
       type: 'pointerDownOnEV',
@@ -49,10 +54,7 @@ const PoolTabPanel = <T,>({evs, type, dispatch}: PoolTabPanelProps<T>): ReactEle
         y: e.clientY,
       },
       size: maxDim,
-      offset: {
-        x: (e.clientX - rect.left)/maxDim,
-        y: (e.clientY - rect.top)/maxDim,
-      },
+      offset,
     });
   };
 

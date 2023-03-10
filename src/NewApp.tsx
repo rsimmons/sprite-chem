@@ -1,14 +1,13 @@
 import React, { useEffect, useReducer, useRef, useState } from 'react';
 
 import PoolTabPanel from './PoolTabPanel';
-import { PointerID } from './extlib/common';
+import { PointerID, AttachedDragData } from './extlib/common';
 import { ClientXY, invariant } from './util';
 import { DragState, INIT_STATE, reducer } from './newState';
 import EditorContainer from './EditorContainer';
 import PreviewerContainer from './PreviewerContainer';
 import { Vec2, vec2scale, vec2sub } from './vec';
 import { TEMPLATE } from './config';
-import { AttachedDragData } from './common';
 import './NewApp.css';
 
 import witch from './sprites/witch.png';
@@ -49,9 +48,14 @@ const App: React.FC = () => {
     const matchDragStates = state.dragStates.filter(s => (s.pointerId === pointerId));
     if (matchDragStates.length === 1) {
       const ds = matchDragStates[0];
+      const ev = state.evs.get(ds.evId);
+      invariant(ev);
       const dd: AttachedDragData = {
-        type: ds.type,
         evId: ds.evId,
+        type: ev.type,
+        value: ev.val,
+        size: ds.size,
+        offset: ds.offset,
       };
       e.draggingEV = dd;
     } else {
