@@ -99,10 +99,6 @@ const App: React.FC = () => {
 
   const stoppedEditorEVId = state.singles.get(TEMPLATE.outputPanel.stoppedEditor.globalId);
   invariant(stoppedEditorEVId);
-  const stoppedEditorEV = state.evs.get(stoppedEditorEVId);
-  invariant(stoppedEditorEV);
-  invariant(stoppedEditorEV.type === TEMPLATE.outputPanel.stoppedEditor.type);
-  const stoppedEditorDepVals = new Map(Array.from(state.evs.get(stoppedEditorEVId)!.refs).map(refEvId => { const ev = state.evs.get(refEvId); invariant(ev); return [refEvId, ev.val]; }));
 
   return (
     <div className="App">
@@ -128,9 +124,7 @@ const App: React.FC = () => {
                   case 'pool': {
                     const pool = TEMPLATE.pools.find(p => (p.globalId === tab.globalId));
                     invariant(pool);
-                    const poolEVIds = state.pools.get(pool.globalId);
-                    invariant(poolEVIds);
-                    return <PoolTabPanel evs={poolEVIds.map(evid => [evid, state.evs.get(evid)!.val])} type={pool.type} dispatch={dispatch} />
+                    return <PoolTabPanel globalId={pool.globalId} state={state} dispatch={dispatch} />
                   }
                 }
 
@@ -145,12 +139,9 @@ const App: React.FC = () => {
           <div>runner output</div>
         ) : (
           <EditorContainer
-            type={stoppedEditorEV.type}
-            initValue={stoppedEditorEV.val}
-            initDepVals={stoppedEditorDepVals}
-            onChange={(newVal) => { dispatch({type: 'evUpdate', evId: stoppedEditorEVId, val: newVal}); }}
-            onAddRef={(evId) => { dispatch({type: 'evAddRef', evId: stoppedEditorEVId, refId: evId}); }}
-            onRemoveRef={(evId) => { dispatch({type: 'evRemoveRef', evId: stoppedEditorEVId, refId: evId}); }}
+            evId={stoppedEditorEVId}
+            state={state}
+            dispatch={dispatch}
           />
         )}
       </div>
@@ -158,8 +149,6 @@ const App: React.FC = () => {
         {state.dragStates.map(ds => {
           switch (ds.type) {
             case 'draggingEV': {
-              const ev = state.evs.get(ds.evId);
-              invariant(ev);
               const adjPos = vec2sub(ds.pos, vec2scale(ds.offset, ds.size));
               return (
                 <div
@@ -172,7 +161,7 @@ const App: React.FC = () => {
                     height: `${ds.size}px`,
                   }}
                 >
-                  <PreviewerContainer type={ev.type} value={ev.val} />
+                  <PreviewerContainer evId={ds.evId} state={state} />
                 </div>
               );
             }

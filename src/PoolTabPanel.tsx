@@ -1,19 +1,16 @@
 import { ReactElement } from 'react';
 import { EVID, EVType, PointerID } from './extlib/common';
 import PreviewerContainer from './PreviewerContainer';
-import { ClientXY } from './util';
-import { AppDispatch } from './newState';
+import { ClientXY, invariant } from './util';
+import { AppDispatch, AppState } from './newState';
 import './PoolTabPanel.css';
 import { Vec2 } from './vec';
 
-// T is the underlying value type of the pool items
-interface PoolTabPanelProps<T> {
-  readonly evs: ReadonlyArray<[EVID, T]>;
-  readonly type: EVType;
+const PoolTabPanel: React.FC<{
+  readonly globalId: string;
+  readonly state: AppState;
   readonly dispatch: AppDispatch;
-}
-
-const PoolTabPanel = <T,>({evs, type, dispatch}: PoolTabPanelProps<T>): ReactElement => {
+}> = ({globalId, state, dispatch}) => {
   const handlePointerDown = (e: React.PointerEvent, evId: string) => {
     e.preventDefault();
 
@@ -58,16 +55,20 @@ const PoolTabPanel = <T,>({evs, type, dispatch}: PoolTabPanelProps<T>): ReactEle
     });
   };
 
+  const poolEVIds = state.pools.get(globalId);
+  invariant(poolEVIds);
+  const evVals = poolEVIds.map(evid => [evid, state.evs.get(evid)!.val]);
+
   return (
     <div className="PoolTabPanel">
-      <div className="PoolTabPanel-list">{evs.map(([evId, val]) => {
+      <div className="PoolTabPanel-list">{evVals.map(([evId, val]) => {
         return (
           <div
             key={evId}
             className="PoolTabPanel-preview-container"
             onPointerDown={e => handlePointerDown(e, evId)}
           >
-            <PreviewerContainer type={type} value={val} />
+            <PreviewerContainer evId={evId} state={state} />
           </div>
         );
       })}

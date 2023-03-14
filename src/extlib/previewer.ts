@@ -1,6 +1,6 @@
 export interface PreviewerContext<T> {
   readonly container: HTMLElement;
-  readonly initialValue: T;
+  readonly initValue: T;
 }
 
 export interface PreviewerReturn<T> {

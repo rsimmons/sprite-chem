@@ -2,43 +2,48 @@ import { ReactElement, useEffect, useRef } from "react";
 import { Previewer, PreviewerReturn } from "./extlib/previewer";
 import { invariant } from "./util";
 import { EXTENSION_MAP, TEMPLATE } from "./config";
-import { EVType } from "./extlib/common";
+import { EVID, EVType } from "./extlib/common";
+import { AppState } from "./newState";
 import './PreviewerContainer.css';
+import { useConstant } from "./utilReact";
 
-interface PreviewerContainerProps<T> {
-  readonly type: EVType;
-  readonly value: T;
-}
-
-const PreviewerContainer = <T,>({type, value}: PreviewerContainerProps<T>): ReactElement => {
-  const previewerExtensionId = TEMPLATE.previewers[type];
-  invariant(previewerExtensionId);
-  const previewer = EXTENSION_MAP.get(previewerExtensionId) as Previewer<T>;
-  invariant(previewer);
+const PreviewerContainer: React.FC<{
+  readonly evId: EVID;
+  readonly state: AppState;
+}> = ({evId, state}) => {
+  useConstant(evId);
 
   const containerRef = useRef<HTMLDivElement>(null);
-  const previewerReturnRef = useRef<PreviewerReturn<T> | null>(null);
+  const previewerReturnRef = useRef<PreviewerReturn<any> | null>(null);
 
   useEffect(() => {
     invariant(containerRef.current);
-    // TODO: verify that `previewer` does not change value?
 
-    if (previewerReturnRef.current) {
-      previewerReturnRef.current.valueChanged(value);
-    } else {
-      previewerReturnRef.current = previewer.create({
-        container: containerRef.current,
-        initialValue: value,
-      });
-    }
+    const ev = state.evs.get(evId);
+    invariant(ev);
+
+    const extensionId = TEMPLATE.previewers[ev.type];
+    invariant(extensionId);
+
+    const previewer = EXTENSION_MAP.get(extensionId) as Previewer<any>;
+    invariant(previewer);
+
+    const initValue = ev.val;
+
+    invariant(!previewerReturnRef.current);
+    previewerReturnRef.current = previewer.create({
+      container: containerRef.current,
+      initValue,
+    });
 
     return () => {
       invariant(previewerReturnRef.current);
       if (previewerReturnRef.current.cleanup) {
         previewerReturnRef.current.cleanup();
       }
+      previewerReturnRef.current = null;
     };
-  }, [value, previewer]);
+  }, []);
 
   return <div ref={containerRef} className="PreviewerContainer" />;
 }

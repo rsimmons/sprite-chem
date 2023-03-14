@@ -1,42 +1,52 @@
-import { ReactElement, useEffect, useRef } from 'react';
-import { EVID, EVType, PointerID } from './extlib/common';
-import { genUidRandom, invariant } from './util';
+import { useEffect, useRef } from 'react';
+import { EVID } from './extlib/common';
+import { invariant } from './util';
 import { EXTENSION_MAP, TEMPLATE } from './config';
 import { Editor, EditorReturn } from './extlib/editor';
+import { AppDispatch, AppState } from './newState';
+import { useConstant } from './utilReact';
 import './EditorContainer.css';
 
-interface EditorContainerProps<T> {
-  readonly type: EVType;
-  readonly initValue: T;
-  readonly initDepVals: ReadonlyMap<EVID, any>;
-  readonly onChange: (newVal: T) => void;
-  readonly onAddRef: (evId: EVID) => void;
-  readonly onRemoveRef: (evId: EVID) => void;
-}
+const EditorContainer: React.FC<{
+  readonly evId: EVID;
+  readonly state: AppState;
+  readonly dispatch: AppDispatch;
+}> = ({evId, state, dispatch}) => {
+  useConstant(evId);
+  useConstant(dispatch);
 
-const EditorContainer = <T,>({type, initValue, initDepVals, onChange, onAddRef, onRemoveRef}: EditorContainerProps<T>): ReactElement => {
   const containerRef = useRef<HTMLDivElement>(null);
-  const editorReturnRef = useRef<EditorReturn<T> | null>(null);
+  const editorReturnRef = useRef<EditorReturn<any> | null>(null);
 
   useEffect(() => {
     invariant(containerRef.current);
 
-    const editorExtensionId = TEMPLATE.editors[type];
-    invariant(editorExtensionId);
-    const editor = EXTENSION_MAP.get(editorExtensionId) as Editor<T>;
+    const ev = state.evs.get(evId);
+    invariant(ev);
+
+    const extensionId = TEMPLATE.editors[ev.type];
+    invariant(extensionId);
+
+    const editor = EXTENSION_MAP.get(extensionId) as Editor<any>;
     invariant(editor);
 
-    if (!editorReturnRef.current) {
-      const ret = editor.create({
-        container: containerRef.current,
-        initValue,
-        initDepVals,
-        valueChanged: (value) => { onChange(value); },
-        addRef: (evId) => { onAddRef(evId); },
-        removeRef: (evId) => { onRemoveRef(evId); },
-      });
-      editorReturnRef.current = ret;
-    }
+    const initValue = ev.val;
+
+    const initDepVals = new Map(Array.from(ev.refs).map(refId => {
+      const ev = state.evs.get(refId);
+      invariant(ev);
+      return [refId, ev.val];
+    }));
+
+    invariant(!editorReturnRef.current);
+    editorReturnRef.current = editor.create({
+      container: containerRef.current,
+      initValue,
+      initDepVals,
+      valueChanged: (newVal) => { dispatch({type: 'evUpdate', evId, val: newVal}); },
+      addRef: (refId) => { dispatch({type: 'evAddRef', evId, refId}); },
+      removeRef: (refId) => { dispatch({type: 'evRemoveRef', evId, refId}); },
+    });
 
     return () => {
       invariant(editorReturnRef.current);
@@ -45,6 +55,8 @@ const EditorContainer = <T,>({type, initValue, initDepVals, onChange, onAddRef, 
       }
       editorReturnRef.current = null;
     };
+
+    // eslint-ignore-next-line react-hooks/exhaustive-deps
   }, []);
 
   return <div

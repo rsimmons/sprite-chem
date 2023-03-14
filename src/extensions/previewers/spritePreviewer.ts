@@ -27,7 +27,7 @@ const spritePreviewer: Previewer<Sprite> = {
       createImage(context.container, url);
     }
 
-    updateImage(context.initialValue.imageBlob); // don't await
+    updateImage(context.initValue.imageBlob); // don't await
 
     return {
       valueChanged: (value) => {

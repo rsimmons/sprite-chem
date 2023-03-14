@@ -24,7 +24,7 @@ export type DragState =
     readonly offset: Vec2; // relative to [-0.5, -0.5] to [0.5, 0.5] enclosing square
   };
 
-interface AppState {
+export interface AppState {
   readonly evs: ReadonlyMap<EVID, {
     readonly type: EVType;
     readonly val: any;
