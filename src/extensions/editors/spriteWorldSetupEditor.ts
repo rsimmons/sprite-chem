@@ -8,38 +8,54 @@ import { invariant } from '../../util';
 const spriteWorldSetupEditor: Editor<SpriteWorldSetup> = {
   create: (context) => {
     let editedValue = context.initValue; // the EV that this editor manages, the sprite world setup
-    const cachedSpriteVals = new Map<EVID, Sprite>();
-    const cachedImageInfo = new Map<EVID, {
-      bitmap: ImageBitmap,
 
-      // [0-1] relative to max dimension
-      scaledWidth: number;
-      scaledHeight: number;
-    }>;
+    interface CachedSpriteInfo {
+      readonly sprite: Sprite;
+      bitmapInfo: {
+        readonly bitmap: ImageBitmap,
+        // [0-1] relative to max dimension
+        readonly scaledWidth: number;
+        readonly scaledHeight: number;
+      } | undefined;
+    }
+    const cachedSpriteInfo = new Map<EVID, CachedSpriteInfo>();
 
-    const loadBitmap = (evId: EVID) => {
+    const loadBitmap = (info: CachedSpriteInfo) => {
       (async () => {
-        const sprite = cachedSpriteVals.get(evId);
-        invariant(sprite);
-        const bitmap = await createImageBitmap(sprite.imageBlob);
-        const invMaxDim = 1/Math.max(bitmap.width, bitmap.height)
-        cachedImageInfo.set(evId, {
+        const bitmap = await createImageBitmap(info.sprite.imageBlob);
+        const invMaxDim = 1/Math.max(bitmap.width, bitmap.height);
+        info.bitmapInfo = {
           bitmap,
           scaledWidth: invMaxDim*bitmap.width,
           scaledHeight: invMaxDim*bitmap.height,
-        });
+        };
       })();
     };
 
+    // handle dependencies of initial value
+    editedValue.instances.forEach((insts, spriteEVId) => {
+      const sprite = context.initDepVals.get(spriteEVId) as Sprite;
+      invariant(sprite);
+      const info: CachedSpriteInfo = {
+        sprite,
+        bitmapInfo: undefined,
+      };
+      cachedSpriteInfo.set(spriteEVId, info);
+      loadBitmap(info);
+    });
+
     const {cleanup, canvas, pixelScale} = createRenderCanvas(context.container, () => {
+      // this is getState callback
       const renderInsts: Map<string, SpriteInstances> = new Map();
       editedValue.instances.forEach((insts, evId) => {
-        const imgInfo = cachedImageInfo.get(evId);
-        if (imgInfo) {
+        const info = cachedSpriteInfo.get(evId);
+        invariant(info);
+        if (info.bitmapInfo) {
+          const bi = info.bitmapInfo;
           renderInsts.set(evId, {
-            bitmap: imgInfo.bitmap,
-            scaledWidth: imgInfo.scaledWidth,
-            scaledHeight: imgInfo.scaledHeight,
+            bitmap: bi.bitmap,
+            scaledWidth: bi.scaledWidth,
+            scaledHeight: bi.scaledHeight,
             instances: insts,
           });
         }
@@ -60,9 +76,14 @@ const spriteWorldSetupEditor: Editor<SpriteWorldSetup> = {
           const newInstances = new Map(editedValue.instances);
           if (!newInstances.has(dragData.evId)) {
             newInstances.set(dragData.evId, []);
-            context.addDep(dragData.evId);
-            cachedSpriteVals.set(dragData.evId, dragData.value);
-            loadBitmap(dragData.evId);
+            context.addRef(dragData.evId);
+            const sprite = dragData.value as Sprite;
+            const info: CachedSpriteInfo = {
+              sprite,
+              bitmapInfo: undefined,
+            };
+            cachedSpriteInfo.set(dragData.evId, info);
+            loadBitmap(info);
           }
 
           const rect = canvas.getBoundingClientRect();

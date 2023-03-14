@@ -17,15 +17,6 @@
   flex: 2;
 }
 
-.App-output-stopped-editor, .App-output-runner {
-  width: 100%;
-  height: 100%;
-}
-
-.App-output-stopped-editor-inactive, .App-output-runner-active {
-  display: none;
-}
-
 .App-header {
   border-bottom: 1px solid #ccc;
   display: flex;

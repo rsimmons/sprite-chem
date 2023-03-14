@@ -28,6 +28,7 @@ interface AppState {
   readonly evs: ReadonlyMap<EVID, {
     readonly type: EVType;
     readonly val: any;
+    readonly refs: ReadonlySet<EVID>; // other EVs this one contains references to
   }>;
   readonly singles: ReadonlyMap<string, EVID>;
   readonly pools: ReadonlyMap<string, ReadonlyArray<EVID>>;
@@ -49,6 +50,7 @@ export const INIT_STATE: AppState = {
     [stoppedEditorEVId, {
       type: stoppedEditorType,
       val: stoppedEditorInitVal,
+      refs: new Set(),
     }],
   ]),
   singles: new Map([
@@ -84,6 +86,18 @@ export type AppAction =
     readonly pos: Vec2;
     readonly size: number;
     readonly offset: Vec2;
+  } | {
+    readonly type: 'evUpdate';
+    readonly evId: EVID;
+    readonly val: any;
+  } | {
+    readonly type: 'evAddRef';
+    readonly evId: EVID;
+    readonly refId: EVID;
+  } | {
+    readonly type: 'evRemoveRef';
+    readonly evId: EVID;
+    readonly refId: EVID;
   };
 
 export type AppDispatch = React.Dispatch<AppAction>;
@@ -110,6 +124,7 @@ export function reducer(state: AppState, action: AppAction): AppState {
       newEvs.set(evid, {
         type: 'sprite',
         val,
+        refs: new Set(),
       });
 
       const newPools = new Map(state.pools);
@@ -200,6 +215,56 @@ export function reducer(state: AppState, action: AppAction): AppState {
           offset: action.offset,
           startPos: action.pos,
         }]),
+      };
+    }
+
+    case 'evUpdate': {
+      const newEvs = new Map(state.evs);
+      const prev = newEvs.get(action.evId);
+      invariant(prev);
+      newEvs.set(action.evId, {
+        ...prev,
+        val: action.val,
+      });
+
+      return {
+        ...state,
+        evs: newEvs,
+      };
+    }
+
+    case 'evAddRef': {
+      const newEvs = new Map(state.evs);
+      const prev = newEvs.get(action.evId);
+      invariant(prev);
+      const newRefs = new Set(prev.refs);
+      newRefs.add(action.refId);
+      newEvs.set(action.evId, {
+        ...prev,
+        refs: newRefs,
+      });
+
+      return {
+        ...state,
+        evs: newEvs,
+      };
+    }
+
+    case 'evRemoveRef': {
+      const newEvs = new Map(state.evs);
+      const prev = newEvs.get(action.evId);
+      invariant(prev);
+      const newRefs = new Set(prev.refs);
+      invariant(newRefs.has(action.refId));
+      newRefs.delete(action.refId);
+      newEvs.set(action.evId, {
+        ...prev,
+        refs: newRefs,
+      });
+
+      return {
+        ...state,
+        evs: newEvs,
       };
     }
   }

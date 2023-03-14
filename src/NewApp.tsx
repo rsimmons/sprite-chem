@@ -102,6 +102,7 @@ const App: React.FC = () => {
   const stoppedEditorEV = state.evs.get(stoppedEditorEVId);
   invariant(stoppedEditorEV);
   invariant(stoppedEditorEV.type === TEMPLATE.outputPanel.stoppedEditor.type);
+  const stoppedEditorDepVals = new Map(Array.from(state.evs.get(stoppedEditorEVId)!.refs).map(refEvId => { const ev = state.evs.get(refEvId); invariant(ev); return [refEvId, ev.val]; }));
 
   return (
     <div className="App">
@@ -140,16 +141,18 @@ const App: React.FC = () => {
         </div>
       </div>
       <div className="App-output-area">
-        <div className={'App-output-stopped-editor ' + (state.running ? 'App-output-stopped-editor-inactive' : 'App-output-stopped-editor-active')}>
+        {state.running ? (
+          <div>runner output</div>
+        ) : (
           <EditorContainer
             type={stoppedEditorEV.type}
             initValue={stoppedEditorEV.val}
-            onChange={(newVal) => { console.log('editor reported new value', newVal) }}
+            initDepVals={stoppedEditorDepVals}
+            onChange={(newVal) => { dispatch({type: 'evUpdate', evId: stoppedEditorEVId, val: newVal}); }}
+            onAddRef={(evId) => { dispatch({type: 'evAddRef', evId: stoppedEditorEVId, refId: evId}); }}
+            onRemoveRef={(evId) => { dispatch({type: 'evRemoveRef', evId: stoppedEditorEVId, refId: evId}); }}
           />
-        </div>
-        <div className={'App-output-runner ' + (state.running ? 'App-output-runner-inactive' : 'App-output-runner-active')}>
-          runner output
-        </div>
+        )}
       </div>
       <div className="App-drags">
         {state.dragStates.map(ds => {

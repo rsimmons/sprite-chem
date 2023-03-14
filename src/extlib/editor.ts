@@ -25,18 +25,18 @@ export interface EditorContext<T> {
   readonly valueChanged: (value: T) => void;
 
   /**
-   * Add or remove a dependency on an embedded value, e.g. one that was
+   * Add or remove a reference to another embedded value, e.g. one that was
    * dragged onto the editor.
    */
-  readonly addDep: (id: EVID) => void;
-  readonly removeDep: (id: EVID) => void;
+  readonly addRef: (evId: EVID) => void;
+  readonly removeRef: (evId: EVID) => void;
 }
 
 export interface EditorReturn<T> {
   /**
-   * A function to notify the editor that an EV it depends on has a new value.
+   * A function to notify the editor that an EV it references has a new value.
    */
-  readonly depChanged?: (id: EVID, value: any) => void;
+  readonly refChanged?: (evId: EVID, value: any) => void;
 
   /**
    * A function to tell the editor to clean up before it is removed from
