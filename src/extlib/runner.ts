@@ -1,6 +1,6 @@
-import { EVID, EVType } from "./common";
+import { EVID, EVInfo, EVType } from "./common";
 
-interface RunnerContext {
+export interface RunnerContext {
   /**
    * The container element that the runner is to install itself into.
    * The container is expected to be a block container and to have
@@ -8,15 +8,12 @@ interface RunnerContext {
    */
   readonly container: HTMLElement;
 
-  readonly evs: ReadonlyMap<EVID, {
-    readonly type: EVType;
-    readonly val: any;
-  }>;
   readonly singles: ReadonlyMap<string, EVID>;
-  readonly pools: ReadonlyMap<string, ReadonlyArray<EVID>>; // it seems unlikely that the runner would need the pools
+  readonly pools: ReadonlyMap<string, ReadonlyArray<EVID>>;
+  readonly evInfos: ReadonlyMap<EVID, EVInfo>;
 }
 
-interface RunnerReturn {
+export interface RunnerReturn {
   /**
    * A function to tell the runner to clean up before it is removed from
    * the document. The runner need not remove its HTML from the container.

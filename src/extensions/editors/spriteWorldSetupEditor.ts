@@ -34,7 +34,7 @@ const spriteWorldSetupEditor: Editor<SpriteWorldSetup> = {
 
     // handle dependencies of initial value
     editedValue.instances.forEach((insts, spriteEVId) => {
-      const sprite = context.initDepVals.get(spriteEVId) as Sprite;
+      const sprite = context.initRefVals.get(spriteEVId)!.value as Sprite;
       invariant(sprite);
       const info: CachedSpriteInfo = {
         sprite,
@@ -72,12 +72,12 @@ const spriteWorldSetupEditor: Editor<SpriteWorldSetup> = {
     const handlePointerUp = (e: PointerEvent) => {
       const dragData = getEventDragData(e);
       if (dragData) {
-        if (dragData.type === 'sprite') {
+        if (dragData.evInfo.type === 'sprite') {
           const newInstances = new Map(editedValue.instances);
           if (!newInstances.has(dragData.evId)) {
             newInstances.set(dragData.evId, []);
             context.addRef(dragData.evId);
-            const sprite = dragData.value as Sprite;
+            const sprite = dragData.evInfo.value as Sprite;
             const info: CachedSpriteInfo = {
               sprite,
               bitmapInfo: undefined,

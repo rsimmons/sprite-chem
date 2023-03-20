@@ -13,6 +13,7 @@ import './NewApp.css';
 import witch from './sprites/witch.png';
 import monster from './sprites/monster.png';
 import cyclops from './sprites/cyclops.png';
+import RunnerContainer from './RunnerContainer';
 
 const App: React.FC = () => {
   const [state, dispatch] = useReducer(reducer, INIT_STATE);
@@ -52,8 +53,7 @@ const App: React.FC = () => {
       invariant(ev);
       const dd: AttachedDragData = {
         evId: ds.evId,
-        type: ev.type,
-        value: ev.val,
+        evInfo: ev,
         size: ds.size,
         offset: ds.offset,
       };
@@ -136,7 +136,10 @@ const App: React.FC = () => {
       </div>
       <div className="App-output-area">
         {state.running ? (
-          <div>runner output</div>
+          <RunnerContainer
+            state={state}
+            dispatch={dispatch}
+          />
         ) : (
           <EditorContainer
             evId={stoppedEditorEVId}

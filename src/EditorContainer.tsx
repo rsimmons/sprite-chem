@@ -3,7 +3,7 @@ import { EVID } from './extlib/common';
 import { invariant } from './util';
 import { EXTENSION_MAP, TEMPLATE } from './config';
 import { Editor, EditorReturn } from './extlib/editor';
-import { AppDispatch, AppState } from './newState';
+import { AppDispatch, AppState, getEvTransitiveRefInfos } from './newState';
 import { useConstant } from './utilReact';
 import './EditorContainer.css';
 
@@ -30,19 +30,15 @@ const EditorContainer: React.FC<{
     const editor = EXTENSION_MAP.get(extensionId) as Editor<any>;
     invariant(editor);
 
-    const initValue = ev.val;
+    const initValue = ev.value;
 
-    const initDepVals = new Map(Array.from(ev.refs).map(refId => {
-      const ev = state.evs.get(refId);
-      invariant(ev);
-      return [refId, ev.val];
-    }));
+    const initRefVals = getEvTransitiveRefInfos(state, [evId]);
 
     invariant(!editorReturnRef.current);
     editorReturnRef.current = editor.create({
       container: containerRef.current,
       initValue,
-      initDepVals,
+      initRefVals,
       valueChanged: (newVal) => { dispatch({type: 'evUpdate', evId, val: newVal}); },
       addRef: (refId) => { dispatch({type: 'evAddRef', evId, refId}); },
       removeRef: (refId) => { dispatch({type: 'evRemoveRef', evId, refId}); },

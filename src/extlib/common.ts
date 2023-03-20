@@ -17,11 +17,16 @@ export type PointerID = 'mouse' | number;
 
 export type ExtensionID = string;
 
+export interface EVInfo {
+  readonly type: EVType;
+  readonly value: any;
+  readonly refs: ReadonlySet<EVID>; // other EVs this one contains references to
+}
+
 // attached to DOM events pointermove, pointerup
 export interface AttachedDragData {
   readonly evId: EVID;
-  readonly type: EVType;
-  readonly value: any;
+  readonly evInfo: EVInfo;
   readonly size: number;
   readonly offset: {x: number, y: number};
 }

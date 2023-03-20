@@ -28,7 +28,7 @@ const PreviewerContainer: React.FC<{
     const previewer = EXTENSION_MAP.get(extensionId) as Previewer<any>;
     invariant(previewer);
 
-    const initValue = ev.val;
+    const initValue = ev.value;
 
     invariant(!previewerReturnRef.current);
     previewerReturnRef.current = previewer.create({

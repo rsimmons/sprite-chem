@@ -2,15 +2,15 @@ import { invariant } from "../util";
 import { Vec2 } from "../vec";
 
 export interface SpriteInstances {
-  bitmap: ImageBitmap;
+  readonly bitmap: ImageBitmap;
 
   // [0-1] relative to max dimension
-  scaledWidth: number;
-  scaledHeight: number;
+  readonly scaledWidth: number;
+  readonly scaledHeight: number;
 
-  instances: ReadonlyArray<{
-    pos: Vec2; // center of sprite
-    size: number; // length of longest axis in world-space
+  readonly instances: ReadonlyArray<{
+    readonly pos: Vec2; // center of sprite
+    readonly size: number; // length of longest axis in world-space
   }>;
 }
 

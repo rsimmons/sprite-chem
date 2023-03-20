@@ -26,6 +26,11 @@ export interface Template {
   readonly editors: {[key: EVType]: ExtensionID};
 
   readonly outputPanel: {
+    readonly runner: {
+      readonly extId: ExtensionID;
+      readonly singleGlobalIds: {[key: string]: string};
+      readonly poolGlobalIds?: {[key: string]: string};
+    },
     readonly stoppedEditor: { // editor extension to show in output panel when program is stopped
       readonly type: EVType;
       // readonly extId: ExtensionID;

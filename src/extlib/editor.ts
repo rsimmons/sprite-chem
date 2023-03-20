@@ -1,4 +1,4 @@
-import { EVID, EVType, PointerID } from "./common";
+import { EVID, EVInfo, EVType, PointerID } from "./common";
 
 export interface EditorContext<T> {
   /**
@@ -16,7 +16,7 @@ export interface EditorContext<T> {
   /**
    * Initial values of any EVs the editor depends on
    */
-  readonly initDepVals: ReadonlyMap<EVID, any>;
+  readonly initRefVals: ReadonlyMap<EVID, EVInfo>;
 
   /**
    * The editor should call this to report that the EV that it's editing

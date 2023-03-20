@@ -57,7 +57,7 @@ const PoolTabPanel: React.FC<{
 
   const poolEVIds = state.pools.get(globalId);
   invariant(poolEVIds);
-  const evVals = poolEVIds.map(evid => [evid, state.evs.get(evid)!.val]);
+  const evVals = poolEVIds.map(evid => [evid, state.evs.get(evid)!.value]);
 
   return (
     <div className="PoolTabPanel">

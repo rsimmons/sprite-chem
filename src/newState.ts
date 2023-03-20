@@ -1,6 +1,6 @@
 import { EXTENSION_MAP, TEMPLATE } from "./config";
 import { Sprite } from "./extensions/types/sprite";
-import { EVID, EVType, PointerID } from "./extlib/common";
+import { EVID, EVInfo, EVType, PointerID } from "./extlib/common";
 import { Creator } from "./extlib/creator";
 import { arrRemoveElemByValue, arrReplaceElemByValue, genUidRandom, invariant } from "./util";
 import { Vec2 } from "./vec";
@@ -27,7 +27,7 @@ export type DragState =
 export interface AppState {
   readonly evs: ReadonlyMap<EVID, {
     readonly type: EVType;
-    readonly val: any;
+    readonly value: any;
     readonly refs: ReadonlySet<EVID>; // other EVs this one contains references to
   }>;
   readonly singles: ReadonlyMap<string, EVID>;
@@ -49,7 +49,7 @@ export const INIT_STATE: AppState = {
   evs: new Map([
     [stoppedEditorEVId, {
       type: stoppedEditorType,
-      val: stoppedEditorInitVal,
+      value: stoppedEditorInitVal,
       refs: new Set(),
     }],
   ]),
@@ -102,6 +102,22 @@ export type AppAction =
 
 export type AppDispatch = React.Dispatch<AppAction>;
 
+export function getEvTransitiveRefInfos(state: AppState, evIds: ReadonlyArray<EVID>): Map<EVID, EVInfo> {
+  // NOTE: We do not deal with graph cycles, and diamonds are inefficient in that we redo work
+
+  const helper = (ei: EVID): ReadonlyArray<[EVID, EVInfo]> => {
+    const ev = state.evs.get(ei);
+    invariant(ev);
+    return [...ev.refs].flatMap(refId => {
+      const refEv = state.evs.get(refId);
+      invariant(refEv);
+      return helper(refId);
+    }).concat([[ei, ev]]);
+  };
+
+  return new Map(evIds.flatMap(helper));
+}
+
 export function reducer(state: AppState, action: AppAction): AppState {
   const findMatchingDragState = (pointerId: PointerID): DragState | undefined => {
     const matchDragStates = state.dragStates.filter(s => (s.pointerId === pointerId));
@@ -115,7 +131,7 @@ export function reducer(state: AppState, action: AppAction): AppState {
 
   switch (action.type) {
     case 'addSprite': {
-      const val: Sprite = {
+      const value: Sprite = {
         imageBlob: action.blob,
       };
 
@@ -123,7 +139,7 @@ export function reducer(state: AppState, action: AppAction): AppState {
       const newEvs = new Map(state.evs);
       newEvs.set(evid, {
         type: 'sprite',
-        val,
+        value,
         refs: new Set(),
       });
 
@@ -224,7 +240,7 @@ export function reducer(state: AppState, action: AppAction): AppState {
       invariant(prev);
       newEvs.set(action.evId, {
         ...prev,
-        val: action.val,
+        value: action.val,
       });
 
       return {
