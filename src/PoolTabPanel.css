@@ -27,3 +27,10 @@ data URIs. The easiest fix seemed to be making this not flex. */
   width: 6em;
   height: 6em;
 }
+
+/* need to do this instead for Safari: https://medium.com/@jeandesravines/use-border-radius-and-outline-simultaneously-on-safari-14ce92889e1f */
+.PoolTabPanel-preview-container-selected {
+  outline: 1px solid #0000ff;
+  outline-offset: 0.25em;
+  border-radius: 1em;
+}

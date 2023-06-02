@@ -24,10 +24,12 @@ const EditorContainer: React.FC<{
     const ev = state.evs.get(evId);
     invariant(ev);
 
-    const extensionId = TEMPLATE.editors[ev.type];
-    invariant(extensionId);
+    const extInfo = TEMPLATE.editors[ev.type];
+    invariant(extInfo);
+    const extensionId = extInfo.extId;
+    const config = extInfo.config;
 
-    const editor = EXTENSION_MAP.get(extensionId) as Editor<any>;
+    const editor = EXTENSION_MAP.get(extensionId) as Editor<any, any>;
     invariant(editor);
 
     const initValue = ev.value;
@@ -36,6 +38,7 @@ const EditorContainer: React.FC<{
 
     invariant(!editorReturnRef.current);
     editorReturnRef.current = editor.create({
+      config,
       container: containerRef.current,
       initValue,
       initRefVals,

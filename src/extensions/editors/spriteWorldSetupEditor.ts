@@ -5,7 +5,7 @@ import { createRenderCanvas, SpriteInstances } from '../../extshared/spriteWorld
 import { AttachedDragData, EVID } from '../../extlib/common';
 import { invariant } from '../../util';
 
-const spriteWorldSetupEditor: Editor<SpriteWorldSetup> = {
+const spriteWorldSetupEditor: Editor<SpriteWorldSetup, undefined> = {
   create: (context) => {
     let editedValue = context.initValue; // the EV that this editor manages, the sprite world setup
 

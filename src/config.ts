@@ -4,12 +4,14 @@ import spritePreviewer from './extensions/previewers/spritePreviewer';
 import spriteWorldSetupEditor from './extensions/editors/spriteWorldSetupEditor';
 import spriteWorldSetupEmpty from './extensions/creators/spriteWorldSetupEmpty';
 import spriteWorldRunner from './extensions/runners/spriteWorldRunner';
+import codeEditor from './extensions/editors/codeEditor';
 
 export const EXTENSION_MAP: ReadonlyMap<ExtensionID, any> = new Map<ExtensionID, any>([
   ['spritePreviewer', spritePreviewer],
   ['spriteWorldSetupEditor', spriteWorldSetupEditor],
   ['spriteWorldSetupEmpty', spriteWorldSetupEmpty],
   ['spriteWorldRunner', spriteWorldRunner],
+  ['codeEditor', codeEditor],
 ]);
 
 export const TEMPLATE: Template = {
@@ -42,7 +44,12 @@ export const TEMPLATE: Template = {
     'sprite': 'spritePreviewer',
   },
   editors: {
-    'spriteWorldSetup': 'spriteWorldSetupEditor',
+    'sprite': {
+      extId: 'codeEditor',
+    },
+    'spriteWorldSetup': {
+      extId: 'spriteWorldSetupEditor',
+    },
   },
 
   outputPanel: {

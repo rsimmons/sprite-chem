@@ -23,7 +23,10 @@ export interface Template {
 
   readonly creators: {[key: EVType]: ReadonlyArray<ExtensionID>}; // first one is default creator
   readonly previewers: {[key: EVType]: ExtensionID};
-  readonly editors: {[key: EVType]: ExtensionID};
+  readonly editors: {[key: EVType]: {
+    readonly extId: ExtensionID;
+    readonly config?: any;
+  }};
 
   readonly outputPanel: {
     readonly runner: {

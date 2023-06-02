@@ -1,10 +1,11 @@
-import { ReactElement } from 'react';
+import { ReactElement, useState } from 'react';
 import { EVID, EVType, PointerID } from './extlib/common';
 import PreviewerContainer from './PreviewerContainer';
 import { ClientXY, invariant } from './util';
 import { AppDispatch, AppState } from './newState';
 import './PoolTabPanel.css';
 import { Vec2 } from './vec';
+import EditorContainer from './EditorContainer';
 
 const PoolTabPanel: React.FC<{
   readonly globalId: string;
@@ -13,6 +14,8 @@ const PoolTabPanel: React.FC<{
 }> = ({globalId, state, dispatch}) => {
   const handlePointerDown = (e: React.PointerEvent, evId: string) => {
     e.preventDefault();
+
+    setSelectedEVId(evId);
 
     // release capture if we implicitly got it (happens with touch by default)
     if (!(e.target instanceof HTMLElement)) {
@@ -59,13 +62,15 @@ const PoolTabPanel: React.FC<{
   invariant(poolEVIds);
   const evVals = poolEVIds.map(evid => [evid, state.evs.get(evid)!.value]);
 
+  const [selectedEVId, setSelectedEVId] = useState<EVID | null>((poolEVIds.length > 0) ? poolEVIds[0] : null);
+
   return (
     <div className="PoolTabPanel">
       <div className="PoolTabPanel-list">{evVals.map(([evId, val]) => {
         return (
           <div
             key={evId}
-            className="PoolTabPanel-preview-container"
+            className={`PoolTabPanel-preview-container ${selectedEVId === evId ? 'PoolTabPanel-preview-container-selected' : ''}`}
             onPointerDown={e => handlePointerDown(e, evId)}
           >
             <PreviewerContainer evId={evId} state={state} />
@@ -73,7 +78,16 @@ const PoolTabPanel: React.FC<{
         );
       })}
       </div>
-      <div className="PoolTabPanel-editor"></div>
+      <div className="PoolTabPanel-editor">
+        {selectedEVId && (
+          <EditorContainer
+            key={selectedEVId}
+            evId={selectedEVId}
+            state={state}
+            dispatch={dispatch}
+          />
+        )}
+      </div>
     </div>
   );
 }

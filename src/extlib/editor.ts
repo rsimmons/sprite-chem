@@ -1,6 +1,11 @@
 import { EVID, EVInfo, EVType, PointerID } from "./common";
 
-export interface EditorContext<T> {
+export interface EditorContext<T, C> {
+  /**
+   * Config, which comes from the host or template
+   */
+  readonly config: C;
+
   /**
    * The container element that the editor is to install itself into.
    * The container is expected to be a block container and to have
@@ -45,6 +50,6 @@ export interface EditorReturn<T> {
   readonly cleanup?: () => void;
 }
 
-export interface Editor<T> {
-  readonly create: (context: EditorContext<T>) => EditorReturn<T>;
+export interface Editor<T, C> {
+  readonly create: (context: EditorContext<T, C>) => EditorReturn<T>;
 }
