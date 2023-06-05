@@ -1,4 +1,4 @@
-import { EXTENSION_MAP, TEMPLATE } from "./config";
+import { TEMPLATE } from "./config";
 import { Sprite } from "./extensions/types/sprite";
 import { EVID, EVInfo, EVType, PointerID } from "./extlib/common";
 import { Creator } from "./extlib/creator";
@@ -38,9 +38,7 @@ export interface AppState {
 }
 
 const stoppedEditorType = TEMPLATE.outputPanel.stoppedEditor.type;
-const stoppedEditorInitValCreatorExtId = TEMPLATE.creators[stoppedEditorType]![0];
-invariant(stoppedEditorInitValCreatorExtId);
-const stoppedEditorInitValCreator = EXTENSION_MAP.get(stoppedEditorInitValCreatorExtId) as Creator<any, void>;
+const stoppedEditorInitValCreator= TEMPLATE.creators[stoppedEditorType]![0] as Creator<any, void>;
 invariant(stoppedEditorInitValCreator);
 const stoppedEditorEVId = genUidRandom();
 const stoppedEditorInitVal = stoppedEditorInitValCreator.create();

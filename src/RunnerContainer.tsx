@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
-import { EVID, ExtensionID } from './extlib/common';
+import { EVID } from './extlib/common';
 import { invariant } from './util';
-import { EXTENSION_MAP, TEMPLATE } from './config';
+import { TEMPLATE } from './config';
 import { Runner, RunnerReturn } from './extlib/runner';
 import { AppDispatch, AppState, getEvTransitiveRefInfos } from './newState';
 import { useConstant } from './utilReact';
@@ -21,7 +21,7 @@ const RunnerContainer: React.FC<{
 
     const runnerConfig = TEMPLATE.outputPanel.runner;
 
-    const runner = EXTENSION_MAP.get(runnerConfig.extId) as Runner;
+    const runner = runnerConfig.ext;
     invariant(runner);
 
     const refRoots: Array<EVID> = [];

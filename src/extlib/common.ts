@@ -15,8 +15,6 @@ export interface LoaderSaver<T> {
 
 export type PointerID = 'mouse' | number;
 
-export type ExtensionID = string;
-
 export interface EVInfo {
   readonly type: EVType;
   readonly value: any;

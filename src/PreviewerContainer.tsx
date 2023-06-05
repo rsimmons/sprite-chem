@@ -1,7 +1,7 @@
 import { ReactElement, useEffect, useRef } from "react";
 import { Previewer, PreviewerReturn } from "./extlib/previewer";
 import { invariant } from "./util";
-import { EXTENSION_MAP, TEMPLATE } from "./config";
+import { TEMPLATE } from "./config";
 import { EVID, EVType } from "./extlib/common";
 import { AppState } from "./newState";
 import './PreviewerContainer.css';
@@ -22,10 +22,7 @@ const PreviewerContainer: React.FC<{
     const ev = state.evs.get(evId);
     invariant(ev);
 
-    const extensionId = TEMPLATE.previewers[ev.type];
-    invariant(extensionId);
-
-    const previewer = EXTENSION_MAP.get(extensionId) as Previewer<any>;
+    const previewer = TEMPLATE.previewers[ev.type];
     invariant(previewer);
 
     const initValue = ev.value;

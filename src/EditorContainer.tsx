@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { EVID } from './extlib/common';
 import { invariant } from './util';
-import { EXTENSION_MAP, TEMPLATE } from './config';
+import { TEMPLATE } from './config';
 import { Editor, EditorReturn } from './extlib/editor';
 import { AppDispatch, AppState, getEvTransitiveRefInfos } from './newState';
 import { useConstant } from './utilReact';
@@ -26,11 +26,11 @@ const EditorContainer: React.FC<{
 
     const extInfo = TEMPLATE.editors[ev.type];
     invariant(extInfo);
-    const extensionId = extInfo.extId;
-    const config = extInfo.config;
 
-    const editor = EXTENSION_MAP.get(extensionId) as Editor<any, any>;
+    const editor = extInfo.ext;
     invariant(editor);
+
+    const config = extInfo.config;
 
     const initValue = ev.value;
 
