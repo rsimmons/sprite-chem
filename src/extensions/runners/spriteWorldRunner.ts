@@ -1,4 +1,4 @@
-import { EVID } from "../../extlib/common";
+import { EVWrapper } from "../../extlib/ev";
 import { Runner } from "../../extlib/runner";
 import { createRenderCanvas, SpriteInstances } from "../../extshared/spriteWorld";
 import { Sprite } from "../types/sprite";
@@ -31,9 +31,9 @@ interface SpriteInfo {
 
 interface SpriteWorldState {
   /**
-   * Map from the EVID of a Sprite to its instances
+   * Map from a Sprite EV to its instances
    */
-  readonly sprites: Map<EVID, SpriteInfo>;
+  readonly sprites: Map<EVWrapper<Sprite>, SpriteInfo>;
 }
 
 function advanceWorldState(state: SpriteWorldState): void {
@@ -50,25 +50,23 @@ const spriteWorldRunner: Runner = {
     context.container.innerHTML = `<div style="width: 100%; height: 100%">spriteWorldRunner</div>`;
 
     // TODO: init worldState from context
-    const swsEvId = context.singles.get('worldSetup')!;
-    const swsEv = context.evInfos.get(swsEvId)!;
-    const sws = swsEv.value as SpriteWorldSetup;
+    const swsEv = context.singles.get('worldSetup')! as EVWrapper<SpriteWorldSetup>;
+    const sws = swsEv.value;
 
     // worldState is undefined until bitmaps are loaded
     let worldState: SpriteWorldState | undefined;
 
     // deep clone and load bitmaps, async
     (async () => {
-      const sprites = new Map<EVID, SpriteInfo>();
+      const sprites = new Map<EVWrapper<Sprite>, SpriteInfo>();
 
-      for (const [spriteEvId, insts] of sws.instances.entries()) {
-        const spriteEv = context.evInfos.get(spriteEvId)!;
-        const sprite = spriteEv.value as Sprite;
+      for (const [spriteEv, insts] of sws.instances.entries()) {
+        const sprite = spriteEv.value;
 
         const bitmap = await createImageBitmap(sprite.imageBlob);
         const invMaxDim = 1/Math.max(bitmap.width, bitmap.height);
 
-        sprites.set(spriteEvId, {
+        sprites.set(spriteEv, {
           bitmapInfo: {
             bitmap,
             scaledWidth: invMaxDim*bitmap.width,
@@ -95,9 +93,9 @@ const spriteWorldRunner: Runner = {
       if (worldState) {
         advanceWorldState(worldState);
 
-        const renderInsts: Map<string, SpriteInstances> = new Map();
-        worldState.sprites.forEach((spriteInfo, evId) => {
-          renderInsts.set(evId, {
+        const renderInsts: Map<EVWrapper<Sprite>, SpriteInstances> = new Map();
+        worldState.sprites.forEach((spriteInfo, spriteEV) => {
+          renderInsts.set(spriteEV, {
             bitmap: spriteInfo.bitmapInfo.bitmap,
             scaledWidth: spriteInfo.bitmapInfo.scaledWidth,
             scaledHeight: spriteInfo.bitmapInfo.scaledHeight,

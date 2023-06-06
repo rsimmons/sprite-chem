@@ -1,32 +1,29 @@
-import React, { useEffect, useReducer, useRef, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 
 import PoolTabPanel from './PoolTabPanel';
-import { PointerID, AttachedDragData } from './extlib/common';
+import { AttachedDragData, PointerID } from './extlib/editor';
 import { ClientXY, invariant } from './util';
-import { DragState, INIT_STATE, reducer } from './newState';
+import { AppAction, AppStateOrLoading, DragState, createInitState, reducer } from './newState';
 import EditorContainer from './EditorContainer';
 import PreviewerContainer from './PreviewerContainer';
+import RunnerContainer from './RunnerContainer';
 import { Vec2, vec2scale, vec2sub } from './vec';
 import { TEMPLATE } from './config';
+import { useEffectfulReducer, useRunOnce } from './useEffectfulReducer';
 import './NewApp.css';
 
-import witch from './sprites/witch.png';
-import monster from './sprites/monster.png';
-import cyclops from './sprites/cyclops.png';
-import RunnerContainer from './RunnerContainer';
-
 const App: React.FC = () => {
-  const [state, dispatch] = useReducer(reducer, INIT_STATE);
+  const [stateRef, dispatch] = useEffectfulReducer<AppStateOrLoading, AppAction>(reducer, () => 'loading');
+  const state = stateRef.current;
 
-  useEffect(() => {
+  useRunOnce(() => {
     (async () => {
-      for (const url of [witch, monster, cyclops]) {
-        const resp = await fetch(url);
-        const blob = await resp.blob();
-        dispatch({type: 'addSprite', blob});
-      }
+      dispatch({
+        type: 'load',
+        state: await createInitState(),
+      });
     })();
-  }, []);
+  });
 
   const handlePointerMoveUp = (e: PointerEvent, type: 'pointerMove'|'pointerUp') => {
     dispatch({
@@ -46,14 +43,13 @@ const App: React.FC = () => {
   };
 
   const attachDragData = (pointerId: PointerID, e: any): void => {
+    invariant(state !== 'loading');
     const matchDragStates = state.dragStates.filter(s => (s.pointerId === pointerId));
     if (matchDragStates.length === 1) {
       const ds = matchDragStates[0];
-      const ev = state.evs.get(ds.evId);
-      invariant(ev);
+      invariant(ds.ev);
       const dd: AttachedDragData = {
-        evId: ds.evId,
-        evInfo: ev,
+        ev: ds.ev,
         size: ds.size,
         offset: ds.offset,
       };
@@ -97,81 +93,88 @@ const App: React.FC = () => {
 
   const [activeTabId, setActiveTabId] = useState(TEMPLATE.tabs[0].tabId);
 
-  const stoppedEditorEVId = state.singles.get(TEMPLATE.outputPanel.stoppedEditor.globalId);
-  invariant(stoppedEditorEVId);
-
   return (
     <div className="App">
-      <div className="App-output-rest">
-        <div className="App-header">
-          <div className="App-tab-links">{TEMPLATE.tabs.map(tab => {
-            return <a key={tab.tabId} className={'App-tab-link ' + ((tab.tabId === activeTabId) ? 'App-tab-link-active' : 'App-tab-link-inactive')} href="#tab" onClick={(e) => handleTabLinkClick(e, tab.tabId)}>{tab.name}</a>
-          })}</div>
-          <div className="App-run-controls">
-            <button onClick={handleRunningToggleClick}>
-              {state.running ? 'Edit' : 'Run'}
-            </button>
-          </div>
-        </div>
-        <div className="App-tab-area">{TEMPLATE.tabs.map(tab => {
-          return (
-            <div key={tab.tabId} className={'App-tab-container ' + ((tab.tabId === activeTabId) ? 'App-tab-container-active' : 'App-tab-container-inactive')}>{
-              (() => {
-                switch (tab.kind) {
-                  case 'empty':
-                    return null;
+      {(state === 'loading') ? (
+        <div className="App-loading">Loading...</div>
+      ) : ((() => {
+        const stoppedEditorEV = state.singles.get(TEMPLATE.outputPanel.stoppedEditor.globalId);
+        invariant(stoppedEditorEV);
 
-                  case 'pool': {
-                    const pool = TEMPLATE.pools.find(p => (p.globalId === tab.globalId));
-                    invariant(pool);
-                    return <PoolTabPanel globalId={pool.globalId} state={state} dispatch={dispatch} />
+        return (
+          <>
+            <div className="App-output-rest">
+              <div className="App-header">
+                <div className="App-tab-links">{TEMPLATE.tabs.map(tab => {
+                  return <a key={tab.tabId} className={'App-tab-link ' + ((tab.tabId === activeTabId) ? 'App-tab-link-active' : 'App-tab-link-inactive')} href="#tab" onClick={(e) => handleTabLinkClick(e, tab.tabId)}>{tab.name}</a>
+                })}</div>
+                <div className="App-run-controls">
+                  <button onClick={handleRunningToggleClick}>
+                    {state.running ? 'Edit' : 'Run'}
+                  </button>
+                </div>
+              </div>
+              <div className="App-tab-area">{TEMPLATE.tabs.map(tab => {
+                return (
+                  <div key={tab.tabId} className={'App-tab-container ' + ((tab.tabId === activeTabId) ? 'App-tab-container-active' : 'App-tab-container-inactive')}>{
+                    (() => {
+                      switch (tab.kind) {
+                        case 'empty':
+                          return null;
+
+                        case 'pool': {
+                          const pool = TEMPLATE.pools.find(p => (p.globalId === tab.globalId));
+                          invariant(pool);
+                          return <PoolTabPanel globalId={pool.globalId} state={state} dispatch={dispatch} />
+                        }
+                      }
+
+                    })()
+                  }</div>
+                );
+              })}
+              </div>
+            </div>
+            <div className="App-output-area">
+              {state.running ? (
+                <RunnerContainer
+                  state={state}
+                  dispatch={dispatch}
+                />
+              ) : (
+                <EditorContainer
+                  ev={stoppedEditorEV}
+                  dispatch={dispatch}
+                />
+              )}
+            </div>
+            <div className="App-drags">
+              {state.dragStates.map(ds => {
+                switch (ds.type) {
+                  case 'draggingEV': {
+                    const adjPos = vec2sub(ds.pos, vec2scale(ds.offset, ds.size));
+                    return (
+                      <div
+                        key={ds.pointerId}
+                        style={{
+                          position: 'absolute',
+                          left: adjPos.x,
+                          top: adjPos.y,
+                          width: `${ds.size}px`,
+                          height: `${ds.size}px`,
+                        }}
+                      >
+                        <PreviewerContainer ev={ds.ev} />
+                      </div>
+                    );
                   }
                 }
-
-              })()
-            }</div>
-          );
-        })}
-        </div>
-      </div>
-      <div className="App-output-area">
-        {state.running ? (
-          <RunnerContainer
-            state={state}
-            dispatch={dispatch}
-          />
-        ) : (
-          <EditorContainer
-            evId={stoppedEditorEVId}
-            state={state}
-            dispatch={dispatch}
-          />
-        )}
-      </div>
-      <div className="App-drags">
-        {state.dragStates.map(ds => {
-          switch (ds.type) {
-            case 'draggingEV': {
-              const adjPos = vec2sub(ds.pos, vec2scale(ds.offset, ds.size));
-              return (
-                <div
-                  key={ds.pointerId}
-                  style={{
-                    position: 'absolute',
-                    left: adjPos.x,
-                    top: adjPos.y,
-                    width: `${ds.size}px`,
-                    height: `${ds.size}px`,
-                  }}
-                >
-                  <PreviewerContainer evId={ds.evId} state={state} />
-                </div>
-              );
-            }
-          }
-          return null;
-        })}
-      </div>
+                return null;
+              })}
+            </div>
+          </>
+        );
+      })())}
     </div>
   );
 };

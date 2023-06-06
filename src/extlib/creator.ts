@@ -1,3 +1,3 @@
 export interface Creator<T, P> {
-  readonly create: (params: P) => T;
+  readonly create: (params?: P) => T;
 }

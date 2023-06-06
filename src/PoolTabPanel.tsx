@@ -1,21 +1,21 @@
 import { ReactElement, useState } from 'react';
-import { EVID, EVType, PointerID } from './extlib/common';
 import PreviewerContainer from './PreviewerContainer';
-import { ClientXY, invariant } from './util';
+import { ClientXY, getObjId, invariant } from './util';
 import { AppDispatch, AppState } from './newState';
 import './PoolTabPanel.css';
 import { Vec2 } from './vec';
 import EditorContainer from './EditorContainer';
+import { EVWrapper } from './extlib/ev';
 
 const PoolTabPanel: React.FC<{
   readonly globalId: string;
   readonly state: AppState;
   readonly dispatch: AppDispatch;
 }> = ({globalId, state, dispatch}) => {
-  const handlePointerDown = (e: React.PointerEvent, evId: string) => {
+  const handlePointerDown = (e: React.PointerEvent, ev: EVWrapper<any>) => {
     e.preventDefault();
 
-    setSelectedEVId(evId);
+    setSelectedEV(ev);
 
     // release capture if we implicitly got it (happens with touch by default)
     if (!(e.target instanceof HTMLElement)) {
@@ -48,7 +48,7 @@ const PoolTabPanel: React.FC<{
     dispatch({
       type: 'pointerDownOnEV',
       pointerId: e.pointerId,
-      evId,
+      ev,
       pos: {
         x: e.clientX,
         y: e.clientY,
@@ -58,32 +58,30 @@ const PoolTabPanel: React.FC<{
     });
   };
 
-  const poolEVIds = state.pools.get(globalId);
-  invariant(poolEVIds);
-  const evVals = poolEVIds.map(evid => [evid, state.evs.get(evid)!.value]);
+  const poolEVs = state.pools.get(globalId);
+  invariant(poolEVs);
 
-  const [selectedEVId, setSelectedEVId] = useState<EVID | null>((poolEVIds.length > 0) ? poolEVIds[0] : null);
+  const [selectedEV, setSelectedEV] = useState<EVWrapper<any> | null>((poolEVs.length > 0) ? poolEVs[0] : null);
 
   return (
     <div className="PoolTabPanel">
-      <div className="PoolTabPanel-list">{evVals.map(([evId, val]) => {
+      <div className="PoolTabPanel-list">{poolEVs.map((ev) => {
         return (
           <div
-            key={evId}
-            className={`PoolTabPanel-preview-container ${selectedEVId === evId ? 'PoolTabPanel-preview-container-selected' : ''}`}
-            onPointerDown={e => handlePointerDown(e, evId)}
+            key={getObjId(ev)}
+            className={`PoolTabPanel-preview-container ${selectedEV === ev ? 'PoolTabPanel-preview-container-selected' : ''}`}
+            onPointerDown={e => handlePointerDown(e, ev)}
           >
-            <PreviewerContainer evId={evId} state={state} />
+            <PreviewerContainer ev={ev} />
           </div>
         );
       })}
       </div>
       <div className="PoolTabPanel-editor">
-        {selectedEVId && (
+        {selectedEV && (
           <EditorContainer
-            key={selectedEVId}
-            evId={selectedEVId}
-            state={state}
+            key={getObjId(selectedEV)}
+            ev={selectedEV}
             dispatch={dispatch}
           />
         )}

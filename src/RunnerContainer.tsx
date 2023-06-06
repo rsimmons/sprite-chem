@@ -1,11 +1,11 @@
 import { useEffect, useRef } from 'react';
-import { EVID } from './extlib/common';
 import { invariant } from './util';
 import { TEMPLATE } from './config';
 import { Runner, RunnerReturn } from './extlib/runner';
-import { AppDispatch, AppState, getEvTransitiveRefInfos } from './newState';
+import { AppDispatch, AppState } from './newState';
 import { useConstant } from './utilReact';
 import './RunnerContainer.css';
+import { EVWrapper } from './extlib/ev';
 
 const RunnerContainer: React.FC<{
   readonly state: AppState;
@@ -24,34 +24,31 @@ const RunnerContainer: React.FC<{
     const runner = runnerConfig.ext;
     invariant(runner);
 
-    const refRoots: Array<EVID> = [];
+    const refRoots: Array<EVWrapper<any>> = [];
 
-    const singles: Map<string, EVID> = new Map();
+    const singles: Map<string, EVWrapper<any>> = new Map();
     for (const [key, globalId] of Object.entries(runnerConfig.singleGlobalIds)) {
-      const ei = state.singles.get(globalId);
-      invariant(ei);
-      refRoots.push(ei);
-      singles.set(key, ei);
+      const ev = state.singles.get(globalId);
+      invariant(ev);
+      refRoots.push(ev);
+      singles.set(key, ev);
     }
 
-    const pools: Map<string, ReadonlyArray<EVID>> = new Map();
+    const pools: Map<string, ReadonlyArray<EVWrapper<any>>> = new Map();
     if (runnerConfig.poolGlobalIds) {
       for (const [key, globalId] of Object.entries(runnerConfig.poolGlobalIds)) {
-        const eis = state.pools.get(globalId);
-        invariant(eis);
-        refRoots.push(...eis);
-        pools.set(key, eis);
+        const evs = state.pools.get(globalId);
+        invariant(evs);
+        refRoots.push(...evs);
+        pools.set(key, evs);
       }
     }
-
-    const evInfos = getEvTransitiveRefInfos(state, refRoots);
 
     invariant(!runnerReturnRef.current);
     runnerReturnRef.current = runner.create({
       container: containerRef.current,
       singles,
       pools,
-      evInfos,
     });
 
     return () => {

@@ -1,3 +1,5 @@
+import { EVWrapper } from "../extlib/ev";
+import { Sprite } from "../extensions/types/sprite";
 import { invariant } from "../util";
 import { Vec2 } from "../vec";
 
@@ -15,7 +17,7 @@ export interface SpriteInstances {
 }
 
 export interface RenderableState {
-  instances: ReadonlyMap<string, SpriteInstances>;
+  instances: ReadonlyMap<EVWrapper<Sprite>, SpriteInstances>;
 }
 
 interface CreateRenderCanvasReturn {
@@ -56,7 +58,7 @@ export function createRenderCanvas(container: HTMLElement, getState: () => Rende
     ctx.clearRect(0, 0, canvasWidth, canvasHeight);
 
     const state = getState();
-    state.instances.forEach((insts, spriteId) => {
+    state.instances.forEach((insts, spriteEV) => {
       for (const inst of insts.instances) {
         const width = inst.size*insts.scaledWidth;
         const height = inst.size*insts.scaledHeight;

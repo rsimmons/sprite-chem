@@ -1,13 +1,13 @@
 import { Sprite } from '../types/sprite';
-import { Editor } from '../../extlib/editor';
+import { Editor, AttachedDragData } from '../../extlib/editor';
 import { SpriteWorldSetup } from '../types/spriteWorldSetup';
 import { createRenderCanvas, SpriteInstances } from '../../extshared/spriteWorld';
-import { AttachedDragData, EVID } from '../../extlib/common';
 import { invariant } from '../../util';
+import { EVWrapper } from '../../extlib/ev';
 
 const spriteWorldSetupEditor: Editor<SpriteWorldSetup, undefined> = {
   create: (context) => {
-    let editedValue = context.initValue; // the EV that this editor manages, the sprite world setup
+    const ev = context.ev;
 
     interface CachedSpriteInfo {
       readonly sprite: Sprite;
@@ -18,7 +18,7 @@ const spriteWorldSetupEditor: Editor<SpriteWorldSetup, undefined> = {
         readonly scaledHeight: number;
       } | undefined;
     }
-    const cachedSpriteInfo = new Map<EVID, CachedSpriteInfo>();
+    const cachedSpriteInfo = new Map<EVWrapper<Sprite>, CachedSpriteInfo>();
 
     const loadBitmap = (info: CachedSpriteInfo) => {
       (async () => {
@@ -33,26 +33,24 @@ const spriteWorldSetupEditor: Editor<SpriteWorldSetup, undefined> = {
     };
 
     // handle dependencies of initial value
-    editedValue.instances.forEach((insts, spriteEVId) => {
-      const sprite = context.initRefVals.get(spriteEVId)!.value as Sprite;
-      invariant(sprite);
+    ev.value.instances.forEach((insts, spriteEV) => {
       const info: CachedSpriteInfo = {
-        sprite,
+        sprite: spriteEV.value,
         bitmapInfo: undefined,
       };
-      cachedSpriteInfo.set(spriteEVId, info);
+      cachedSpriteInfo.set(spriteEV, info);
       loadBitmap(info);
     });
 
     const {cleanup, canvas, pixelScale} = createRenderCanvas(context.container, () => {
       // this is getState callback
-      const renderInsts: Map<string, SpriteInstances> = new Map();
-      editedValue.instances.forEach((insts, evId) => {
-        const info = cachedSpriteInfo.get(evId);
+      const renderInsts: Map<EVWrapper<Sprite>, SpriteInstances> = new Map();
+      ev.value.instances.forEach((insts, spriteEV) => {
+        const info = cachedSpriteInfo.get(spriteEV);
         invariant(info);
         if (info.bitmapInfo) {
           const bi = info.bitmapInfo;
-          renderInsts.set(evId, {
+          renderInsts.set(spriteEV, {
             bitmap: bi.bitmap,
             scaledWidth: bi.scaledWidth,
             scaledHeight: bi.scaledHeight,
@@ -72,22 +70,20 @@ const spriteWorldSetupEditor: Editor<SpriteWorldSetup, undefined> = {
     const handlePointerUp = (e: PointerEvent) => {
       const dragData = getEventDragData(e);
       if (dragData) {
-        if (dragData.evInfo.type === 'sprite') {
-          const newInstances = new Map(editedValue.instances);
-          if (!newInstances.has(dragData.evId)) {
-            newInstances.set(dragData.evId, []);
-            context.addRef(dragData.evId);
-            const sprite = dragData.evInfo.value as Sprite;
+        if (dragData.ev.typeId === 'sprite') {
+          const newInstances = new Map(ev.value.instances);
+          if (!newInstances.has(dragData.ev)) {
+            newInstances.set(dragData.ev, []);
             const info: CachedSpriteInfo = {
-              sprite,
+              sprite: dragData.ev.value as Sprite,
               bitmapInfo: undefined,
             };
-            cachedSpriteInfo.set(dragData.evId, info);
+            cachedSpriteInfo.set(dragData.ev, info);
             loadBitmap(info);
           }
 
           const rect = canvas.getBoundingClientRect();
-          newInstances.set(dragData.evId, newInstances.get(dragData.evId)!.concat([{
+          newInstances.set(dragData.ev, newInstances.get(dragData.ev)!.concat([{
             // NOTE: position we create is for center of sprite, but in dragData
             // position is for top-left corner of containing square
             pos: {
@@ -97,12 +93,12 @@ const spriteWorldSetupEditor: Editor<SpriteWorldSetup, undefined> = {
             size: pixelScale*dragData.size,
           }]));
 
-          editedValue = {
-            ...editedValue,
+          ev.value = {
+            ...ev.value,
             instances: newInstances,
           };
 
-          context.valueChanged(editedValue);
+          // TODO: notify listeners of value change
         }
       }
     };

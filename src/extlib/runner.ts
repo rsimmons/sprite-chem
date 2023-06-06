@@ -1,4 +1,4 @@
-import { EVID, EVInfo, EVType } from "./common";
+import { EVWrapper } from "./ev";
 
 export interface RunnerContext {
   /**
@@ -8,9 +8,8 @@ export interface RunnerContext {
    */
   readonly container: HTMLElement;
 
-  readonly singles: ReadonlyMap<string, EVID>;
-  readonly pools: ReadonlyMap<string, ReadonlyArray<EVID>>;
-  readonly evInfos: ReadonlyMap<EVID, EVInfo>;
+  readonly singles: ReadonlyMap<string, EVWrapper<any>>;
+  readonly pools: ReadonlyMap<string, ReadonlyArray<EVWrapper<any>>>;
 }
 
 export interface RunnerReturn {

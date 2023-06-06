@@ -1,17 +1,15 @@
-import { ReactElement, useEffect, useRef } from "react";
-import { Previewer, PreviewerReturn } from "./extlib/previewer";
+import { useEffect, useRef } from "react";
+import { PreviewerReturn } from "./extlib/previewer";
 import { invariant } from "./util";
 import { TEMPLATE } from "./config";
-import { EVID, EVType } from "./extlib/common";
-import { AppState } from "./newState";
 import './PreviewerContainer.css';
 import { useConstant } from "./utilReact";
+import { EVWrapper } from "./extlib/ev";
 
 const PreviewerContainer: React.FC<{
-  readonly evId: EVID;
-  readonly state: AppState;
-}> = ({evId, state}) => {
-  useConstant(evId);
+  readonly ev: EVWrapper<any>;
+}> = ({ev}) => {
+  useConstant(ev);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const previewerReturnRef = useRef<PreviewerReturn<any> | null>(null);
@@ -19,18 +17,13 @@ const PreviewerContainer: React.FC<{
   useEffect(() => {
     invariant(containerRef.current);
 
-    const ev = state.evs.get(evId);
-    invariant(ev);
-
-    const previewer = TEMPLATE.previewers[ev.type];
+    const previewer = TEMPLATE.previewers[ev.typeId];
     invariant(previewer);
-
-    const initValue = ev.value;
 
     invariant(!previewerReturnRef.current);
     previewerReturnRef.current = previewer.create({
       container: containerRef.current,
-      initValue,
+      ev,
     });
 
     return () => {

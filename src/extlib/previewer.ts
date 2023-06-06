@@ -1,10 +1,11 @@
+import { EVWrapper } from "./ev";
+
 export interface PreviewerContext<T> {
   readonly container: HTMLElement;
-  readonly initValue: T;
+  readonly ev: EVWrapper<T>;
 }
 
 export interface PreviewerReturn<T> {
-  readonly valueChanged: (value: T) => void;
   readonly cleanup?: () => void;
 }
 

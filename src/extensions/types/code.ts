@@ -1,5 +1,3 @@
-import { LoaderSaver } from "../../extlib/common";
-
 export type Name = string;
 
 export type NodeId = string;
@@ -78,9 +76,4 @@ export type ASTNode =
 
 export interface Code {
   readonly decls: ReadonlyArray<DeclNode>;
-}
-
-export const loaderSaver: LoaderSaver<Code> = {
-  load: (state) => { throw new Error('unimplemented'); },
-  save: (val) => { throw new Error('unimplemented'); },
 }

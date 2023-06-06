@@ -1,4 +1,13 @@
-import { EVID, EVInfo, EVType, PointerID } from "./common";
+import { EVWrapper } from "./ev";
+
+export type PointerID = 'mouse' | number;
+
+// attached to DOM events pointermove, pointerup
+export interface AttachedDragData {
+  readonly ev: EVWrapper<any>
+  readonly size: number;
+  readonly offset: {x: number, y: number};
+}
 
 export interface EditorContext<T, C> {
   /**
@@ -14,35 +23,12 @@ export interface EditorContext<T, C> {
   readonly container: HTMLElement;
 
   /**
-   * The initial underlying value this editor is editing
+   * The EV this editor is editing
    */
-  readonly initValue: T;
-
-  /**
-   * Initial values of any EVs the editor depends on
-   */
-  readonly initRefVals: ReadonlyMap<EVID, EVInfo>;
-
-  /**
-   * The editor should call this to report that the EV that it's editing
-   * has an updated value.
-   */
-  readonly valueChanged: (value: T) => void;
-
-  /**
-   * Add or remove a reference to another embedded value, e.g. one that was
-   * dragged onto the editor.
-   */
-  readonly addRef: (evId: EVID) => void;
-  readonly removeRef: (evId: EVID) => void;
+  readonly ev: EVWrapper<T>;
 }
 
 export interface EditorReturn<T> {
-  /**
-   * A function to notify the editor that an EV it references has a new value.
-   */
-  readonly refChanged?: (evId: EVID, value: any) => void;
-
   /**
    * A function to tell the editor to clean up before it is removed from
    * the document. The editor need not remove its HTML from the container.

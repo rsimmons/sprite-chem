@@ -1,4 +1,5 @@
-import { EVID, LoaderSaver } from "../../extlib/common";
+import { EVWrapper } from "../../extlib/ev";
+import { Sprite } from "./sprite";
 
 interface SpriteInstance {
   /**
@@ -19,10 +20,5 @@ export interface SpriteWorldSetup {
   /**
    * Map from the EVID of a Sprite to its instances
    */
-  readonly instances: ReadonlyMap<EVID, ReadonlyArray<SpriteInstance>>;
-}
-
-export const loaderSaver: LoaderSaver<SpriteWorldSetup> = {
-  load: (state) => { throw new Error('unimplemented'); },
-  save: (val) => { throw new Error('unimplemented'); },
+  readonly instances: ReadonlyMap<EVWrapper<Sprite>, ReadonlyArray<SpriteInstance>>;
 }

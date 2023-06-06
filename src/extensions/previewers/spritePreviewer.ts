@@ -27,13 +27,11 @@ const spritePreviewer: Previewer<Sprite> = {
       createImage(context.container, url);
     }
 
-    updateImage(context.initValue.imageBlob); // don't await
+    updateImage(context.ev.value.imageBlob); // don't await
 
-    return {
-      valueChanged: (value) => {
-        updateImage(value.imageBlob); // don't await
-      },
-    };
+    // TODO: subscribe to ev changes
+
+    return {};
   },
 };
 

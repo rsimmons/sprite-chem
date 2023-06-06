@@ -526,8 +526,6 @@ const CodeEditor: React.FC = () => {
 
 const codeEditor: Editor<Code, undefined> = {
   create: (context) => {
-    let codeValue = context.initValue; // the EV that this editor manages, the code
-
     // This is a total mess, but seems to work. As of the time of writing this,
     // React doesn't allow you to unmount a root during a useEffect cleanup?!
     // See:

@@ -44,3 +44,11 @@ export function useEffectfulReducer<S, A>(reducer: (s: S, a: A, d: (action: A) =
 
   return [authoritativeState as ImmutableRef<S>, memoizedDispatch];
 }
+
+export function useRunOnce(f: () => void): void {
+  const ran = useRef(false);
+  if (!ran.current) {
+    f();
+    ran.current = true;
+  }
+}

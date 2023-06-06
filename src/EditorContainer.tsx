@@ -1,18 +1,17 @@
 import { useEffect, useRef } from 'react';
-import { EVID } from './extlib/common';
 import { invariant } from './util';
 import { TEMPLATE } from './config';
 import { Editor, EditorReturn } from './extlib/editor';
-import { AppDispatch, AppState, getEvTransitiveRefInfos } from './newState';
+import { AppDispatch } from './newState';
 import { useConstant } from './utilReact';
 import './EditorContainer.css';
+import { EVWrapper } from './extlib/ev';
 
 const EditorContainer: React.FC<{
-  readonly evId: EVID;
-  readonly state: AppState;
+  readonly ev: EVWrapper<any>;
   readonly dispatch: AppDispatch;
-}> = ({evId, state, dispatch}) => {
-  useConstant(evId);
+}> = ({ev, dispatch}) => {
+  useConstant(ev);
   useConstant(dispatch);
 
   const containerRef = useRef<HTMLDivElement>(null);
@@ -21,10 +20,7 @@ const EditorContainer: React.FC<{
   useEffect(() => {
     invariant(containerRef.current);
 
-    const ev = state.evs.get(evId);
-    invariant(ev);
-
-    const extInfo = TEMPLATE.editors[ev.type];
+    const extInfo = TEMPLATE.editors[ev.typeId];
     invariant(extInfo);
 
     const editor = extInfo.ext;
@@ -32,19 +28,11 @@ const EditorContainer: React.FC<{
 
     const config = extInfo.config;
 
-    const initValue = ev.value;
-
-    const initRefVals = getEvTransitiveRefInfos(state, [evId]);
-
     invariant(!editorReturnRef.current);
     editorReturnRef.current = editor.create({
       config,
       container: containerRef.current,
-      initValue,
-      initRefVals,
-      valueChanged: (newVal) => { dispatch({type: 'evUpdate', evId, val: newVal}); },
-      addRef: (refId) => { dispatch({type: 'evAddRef', evId, refId}); },
-      removeRef: (refId) => { dispatch({type: 'evRemoveRef', evId, refId}); },
+      ev,
     });
 
     return () => {
