@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 
 import PoolTabPanel from './PoolTabPanel';
-import { AttachedDragData, PointerID } from './extlib/editor';
+import { EVDragInfo, ValueDragInfo, PointerID } from './extlib/editor';
 import { ClientXY, invariant } from './util';
 import { AppAction, AppStateOrLoading, DragState, createInitState, reducer } from './newState';
 import EditorContainer from './EditorContainer';
@@ -11,6 +11,16 @@ import { Vec2, vec2scale, vec2sub } from './vec';
 import { TEMPLATE } from './config';
 import { useEffectfulReducer, useRunOnce } from './useEffectfulReducer';
 import './NewApp.css';
+
+const WrappedDOMNode: React.FC<{node: HTMLElement}> = ({node}) => {
+  return (
+    <div className="WrappedDOMNode" ref={nodeRef => {
+      if (nodeRef) {
+        nodeRef.appendChild(node);
+      }
+    }} />
+  );
+}
 
 const App: React.FC = () => {
   const [stateRef, dispatch] = useEffectfulReducer<AppStateOrLoading, AppAction>(reducer, () => 'loading');
@@ -47,13 +57,31 @@ const App: React.FC = () => {
     const matchDragStates = state.dragStates.filter(s => (s.pointerId === pointerId));
     if (matchDragStates.length === 1) {
       const ds = matchDragStates[0];
-      invariant(ds.ev);
-      const dd: AttachedDragData = {
-        ev: ds.ev,
-        size: ds.size,
-        offset: ds.offset,
-      };
-      e.draggingEV = dd;
+      switch (ds.type) {
+        case 'detachingEV':
+        case 'draggingEV': {
+          const di: EVDragInfo = {
+            ev: ds.ev,
+            size: ds.size,
+            offset: ds.offset,
+          };
+          e.draggingEV = di;
+          break;
+        }
+
+        case 'draggingValue': {
+          const di: ValueDragInfo = {
+            typeId: ds.typeId,
+            value: ds.value,
+            offset: ds.offset,
+          };
+          e.draggingValue = di;
+          break;
+        }
+
+        default:
+          throw new Error('unhandled drag state type');
+      }
     } else {
       invariant(matchDragStates.length === 0);
     }
@@ -165,6 +193,24 @@ const App: React.FC = () => {
                         }}
                       >
                         <PreviewerContainer ev={ds.ev} />
+                      </div>
+                    );
+                  }
+
+                  case 'draggingValue': {
+                    const adjPos = vec2sub(ds.pos, ds.offset);
+                    return (
+                      <div
+                        key={ds.pointerId}
+                        style={{
+                          position: 'absolute',
+                          left: adjPos.x,
+                          top: adjPos.y,
+                        }}
+                      >
+                        {ds.node && (
+                          <WrappedDOMNode node={ds.node} />
+                        )}
                       </div>
                     );
                   }

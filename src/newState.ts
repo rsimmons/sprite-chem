@@ -21,6 +21,14 @@ export type DragState =
     readonly pos: Vec2;
     readonly size: number;
     readonly offset: Vec2; // relative to [-0.5, -0.5] to [0.5, 0.5] enclosing square
+  } | {
+    readonly type: 'draggingValue';
+    readonly pointerId: PointerID;
+    readonly typeId: string;
+    readonly value: any;
+    readonly pos: Vec2;
+    readonly node: HTMLElement | undefined;
+    readonly offset: Vec2; // in pixels relative to top left
   };
 
 export interface AppState {
@@ -64,6 +72,14 @@ export type AppAction =
     readonly ev: EVWrapper<any>;
     readonly pos: Vec2;
     readonly size: number;
+    readonly offset: Vec2;
+  } | {
+    readonly type: 'pointerDownOnValue';
+    readonly pointerId: PointerID;
+    readonly typeId: string;
+    readonly value: any;
+    readonly pos: Vec2;
+    readonly node: HTMLElement | undefined;
     readonly offset: Vec2;
   };
 
@@ -134,6 +150,18 @@ export function reducer(state: AppStateOrLoading, action: AppAction): AppStateOr
             dragStates: arrReplaceElemByValue(state.dragStates, ds, newDs),
           };
         }
+
+        case 'draggingValue': {
+          const newDs: DragState = {
+            ...ds,
+            pos: action.pos,
+          };
+
+          return {
+            ...state,
+            dragStates: arrReplaceElemByValue(state.dragStates, ds, newDs),
+          };
+        }
       }
 
       throw new Error('should be unreachable');
@@ -162,6 +190,21 @@ export function reducer(state: AppStateOrLoading, action: AppAction): AppStateOr
           size: action.size,
           offset: action.offset,
           startPos: action.pos,
+        }]),
+      };
+    }
+
+    case 'pointerDownOnValue': {
+      return {
+        ...state,
+        dragStates: state.dragStates.concat([{
+          type: 'draggingValue',
+          pointerId: action.pointerId,
+          typeId: action.typeId,
+          value: action.value,
+          pos: action.pos,
+          node: action.node,
+          offset: action.offset,
         }]),
       };
     }

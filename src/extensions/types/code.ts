@@ -48,21 +48,34 @@ export interface EmitNode {
   readonly expr: ValueExprNode; // the value we are emitting
 }
 
+export interface TmpDeclNode {
+  readonly type: 'TmpDecl';
+  readonly nid: NodeId;
+  readonly decl: DeclNode;
+}
+
 export type DeclNode =
   | WhenNode
-  | EqNode;
+  | EqNode
+  | TmpDeclNode;
 export function isDeclNode(node: ASTNode): node is DeclNode {
-  return (node.type === 'When') || (node.type === 'Eq');
+  return (node.type === 'When') || (node.type === 'Eq') || (node.type === 'TmpDecl');
 }
 
 export type ValueExprNode =
   | HoleNode
   | VarRefNode
   | FnAppNode;
+export function isValueExprNode(node: ASTNode): node is ValueExprNode {
+  return (node.type === 'Hole') || (node.type === 'VarRef') || (node.type === 'FnApp');
+}
 
 export type BindExprNode =
   | VarBindNode
   | HoleNode;
+export function isBindExprNode(node: ASTNode): node is BindExprNode {
+  return (node.type === 'VarBind') || (node.type === 'Hole');
+}
 
 export type StmtNode =
   | EqNode

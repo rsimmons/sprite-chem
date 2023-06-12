@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { invariant } from './util';
 import { TEMPLATE } from './config';
-import { Editor, EditorReturn } from './extlib/editor';
+import { Editor, EditorReturn, PointerID } from './extlib/editor';
 import { AppDispatch } from './newState';
 import { useConstant } from './utilReact';
 import './EditorContainer.css';
@@ -33,6 +33,24 @@ const EditorContainer: React.FC<{
       config,
       container: containerRef.current,
       ev,
+      beginDrag: (
+        typeId: string,
+        pointerId: PointerID,
+        value: any,
+        pos: {x: number, y: number},
+        node: HTMLElement | undefined,
+        offset: {x: number, y: number},
+      ) => {
+        dispatch({
+          type: 'pointerDownOnValue',
+          pointerId,
+          typeId,
+          value,
+          pos,
+          node,
+          offset,
+        });
+      },
     });
 
     return () => {

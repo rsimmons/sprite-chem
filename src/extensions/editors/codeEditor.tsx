@@ -1,10 +1,119 @@
-import React, { useContext, useEffect, useReducer, useRef } from 'react';
+import React, { useReducer, useRef } from 'react';
 import ReactDOM from 'react-dom/client';
-import { Editor } from '../../extlib/editor';
-import { invariant } from '../../util';
+import { Editor, EditorContext, ValueDragInfo } from '../../extlib/editor';
+import { genUidRandom, invariant } from '../../util';
 import { Vec2, vec2dist, vec2sub } from '../../vec';
-import { ASTNode, Code, DeclNode, EqNode, FnAppNode, HoleNode, isDeclNode, Name, NodeId, VarRefNode } from '../types/code';
+import { ASTNode, Code, DeclNode, EqNode, FnAppNode, HoleNode, isBindExprNode, isDeclNode, isValueExprNode, Name, NodeId, TmpDeclNode, ValueExprNode, VarRefNode } from '../types/code';
 import './codeEditor.css';
+
+interface Rect {
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+}
+
+function pointInRect(p: Vec2, r: Rect): boolean {
+  return ((p.x >= r.left) && (p.x < (r.left+r.width)) && (p.y > r.top) && (p.y < (r.top+r.height)));
+}
+
+function transformNodeArr<N extends ASTNode>(arr: ReadonlyArray<N>, pred: (n: ASTNode) => n is N, transform: (node: ASTNode) => ASTNode): ReadonlyArray<N> {
+  let changed = false;
+  const newArr = arr.map(el => {
+    const nel = transform(el);
+    if (!pred(nel)) {
+      throw new Error();
+    }
+    if (nel !== el) {
+      changed = true;
+    }
+    return nel;
+  });
+  return changed ? newArr : arr;
+}
+
+function transformChildren<N extends ASTNode, X>(node: N, transform: (node: ASTNode, ctx: X) => ASTNode, ctx: X): N {
+  // this could be factored out like transformNodeArr above
+  const xChild = <C extends ASTNode>(n: C, pred: (n: ASTNode) => n is C): C => {
+    const tn = transform(n, ctx);
+    if (!pred(tn)) {
+      throw new Error();
+    }
+    return tn;
+  }
+
+  // this could be factored out like transformNodeArr above
+  const xChildMap = <C extends ASTNode>(map: ReadonlyMap<string, C>, pred: (n: ASTNode) => n is C): ReadonlyMap<string, C> => {
+    let changed = false;
+    const newMap = new Map<string, C>();
+    for (const [k, v] of map.entries()) {
+      const nv = transform(v, ctx);
+      if (!pred(nv)) {
+        throw new Error();
+      }
+      if (nv !== v) {
+        changed = true;
+      }
+      newMap.set(k, nv);
+    }
+    return changed ? newMap : map;
+  };
+
+  switch (node.type) {
+    case 'Hole':
+    case 'VarRef':
+    case 'VarBind':
+      // no children
+      return node;
+
+    case 'FnApp': {
+      const newArgs = xChildMap(node.args, isValueExprNode);
+
+      if (newArgs === node.args) {
+        return node;
+      } else {
+        return {
+          ...node,
+          args: newArgs,
+        };
+      }
+    }
+
+    case 'When':
+      throw new Error('unimplemented');
+
+    case 'Eq': {
+      const newLHS = xChild(node.lhs, isBindExprNode);
+      const newRHS = xChild(node.rhs, isValueExprNode);
+
+      if ((newLHS === node.lhs) && (newRHS === node.rhs)) {
+        return node;
+      } else {
+        return {
+          ...node,
+          lhs: newLHS,
+          rhs: newRHS,
+        };
+      }
+    }
+
+    case 'Emit':
+      throw new Error('unimplemented');
+
+    case 'TmpDecl': {
+      const newDecl = xChild(node.decl, isDeclNode);
+
+      if (newDecl === node.decl) {
+        return node;
+      } else {
+        return {
+          ...node,
+          decl: newDecl,
+        };
+      }
+    }
+  }
+}
 
 export type ParsedTmplLineItem =
   {
@@ -88,10 +197,10 @@ interface Analysis {
   readonly type: Type;
 }
 
-function makeFnApp(fnNid: NodeId, fnIface: FnExtIface): ASTNode {
+function makeFnApp(nid: NodeId, fnNid: NodeId, fnIface: FnExtIface): ASTNode {
   return {
     type: 'FnApp',
-    nid: 'app',
+    nid,
     fn: fnNid,
     args: new Map(fnIface.params.map((p, idx) =>
       [p.pid, {
@@ -107,6 +216,11 @@ const Block: React.FC<{children: React.ReactNode, ctx: NodeViewCtx}> = ({childre
 
   const handlePointerDown = (e: React.PointerEvent) => {
     e.preventDefault();
+
+    if (!ctx.dragNode) {
+      // not draggable
+      return;
+    }
 
     // release capture if we implicitly got it (happens with touch by default)
     if (!(e.target instanceof HTMLElement)) {
@@ -126,17 +240,38 @@ const Block: React.FC<{children: React.ReactNode, ctx: NodeViewCtx}> = ({childre
       y: e.clientY - rect.top,
     };
 
-    ctx.dispatch({
-      type: 'pointerDownOnNode',
-      pointerId: e.pointerId,
-      area: ctx.area,
-      node: ctx.dragNode,
-      pos: {
+    // TODO: if we're dragging a tree of more than one node, need to "deep"-regenerate new node ids for all of them
+    const dragNode: ASTNode = (ctx.kind === 'palette') ? {...ctx.dragNode, nid: genUidRandom()} : ctx.dragNode;
+
+    if (ctx.kind === 'code-regular') {
+      if (!isDeclNode(dragNode)) {
+        throw new Error('unimplemented');
+      }
+
+      // TODO: wrap this decl node in a TmpDecl node, dispatch action to update AST
+      const newNode: TmpDeclNode = {
+        type: 'TmpDecl',
+        nid: genUidRandom(),
+        decl: dragNode,
+      };
+      ctx.dispatch({
+        type: 'replaceNode',
+        oldNode: dragNode,
+        newNode,
+      });
+    }
+
+    ctx.editorCtx.beginDrag(
+      'codeEditor/node',
+      e.pointerId,
+      dragNode,
+      {
         x: e.clientX,
         y: e.clientY,
       },
+      blockElem.current.cloneNode(true) as HTMLElement,
       offset,
-    });
+    );
   };
 
   return (
@@ -162,11 +297,13 @@ const BlockVList: React.FC<{children: React.ReactNode}> = ({children}) => {
   return <div className="CodeEditor-block-vlist">{children}</div>
 };
 
+type NodeViewCtxKind = 'palette' | 'code-regular' | 'code-tmp';
 interface NodeViewCtx {
+  readonly kind: NodeViewCtxKind;
   readonly varAn: ReadonlyMap<NodeId, Analysis>;
   readonly dispatch: CodeEditorDispatch;
-  readonly area: DragArea;
-  readonly dragNode: ASTNode;
+  readonly dragNode: ASTNode | undefined;
+  readonly editorCtx: EditorContext<Code, undefined>;
 }
 
 const HoleView: React.FC<{node: HoleNode, ctx: NodeViewCtx}> = ({node}) => {
@@ -207,185 +344,162 @@ const FnAppView: React.FC<{node: FnAppNode, ctx: NodeViewCtx}> = ({node, ctx}) =
 };
 
 const VarRefView: React.FC<{node: VarRefNode, ctx: NodeViewCtx}> = ({node, ctx}) => {
-  return <Block ctx={ctx}><BlockLine><BlockLineText text={`VarRef:${node.refId}`}></BlockLineText></BlockLine></Block>;
+  return (
+    <Block ctx={ctx}>
+      <BlockLine>
+        <BlockLineText text={`VarRef:${node.refId}`} />
+      </BlockLine>
+    </Block>
+  );
 };
 
 const EqView: React.FC<{node: EqNode, ctx: NodeViewCtx}> = ({node, ctx}) => {
-  return <Block ctx={ctx}><BlockLine><BlockLineText text="="></BlockLineText></BlockLine></Block>;
+  return (
+    <Block ctx={ctx}>
+      <BlockLine>
+        <NodeView node={node.lhs} ctx={ctx} />
+        <BlockLineText text="=" />
+        <NodeView node={node.rhs} ctx={ctx} />
+      </BlockLine>
+    </Block>
+  );
 };
 
 const NodeView: React.FC<{node: ASTNode, ctx: NodeViewCtx}> = ({node, ctx}) => {
+  const newCtx = {...ctx, dragNode: (ctx.kind === 'code-regular') ? node : ctx.dragNode};
+
   switch (node.type) {
     case 'Hole':
-      return <HoleView node={node} ctx={ctx} />
+      return <HoleView node={node} ctx={newCtx} />
 
     case 'FnApp':
-      return <FnAppView node={node} ctx={ctx} />
+      return <FnAppView node={node} ctx={newCtx} />
 
     case 'VarRef':
-      return <VarRefView node={node} ctx={ctx} />
+      return <VarRefView node={node} ctx={newCtx} />
 
     case 'Eq':
-      return <EqView node={node} ctx={ctx} />
+      return <EqView node={node} ctx={newCtx} />
+
+    case 'TmpDecl':
+      return <div className="CodeEditor-tmp-node"><NodeView node={node.decl} ctx={{...ctx, kind: 'code-tmp', dragNode: undefined}} /></div>
 
     default:
       throw new Error('unimplemented');
   }
 };
 
-type DragArea = 'palette' | 'code' | 'drag';
-
-type Region =
-  {
-    readonly type: 'other';
-  } | {
-    readonly type: 'codeBg';
-  };
+const DeclListView: React.FC<{decls: ReadonlyArray<DeclNode>, ctx: NodeViewCtx}> = ({decls, ctx}) => {
+  return (
+    <BlockVList>
+      {decls.map(decl => (
+        <NodeView key={decl.nid} node={decl} ctx={ctx} />
+      ))}
+    </BlockVList>
+  );
+}
 
 type CodeEditorAction =
   {
-    readonly type: 'pointerDownOnNode';
-    readonly pointerId: number;
-    readonly area: DragArea;
-    readonly node: ASTNode;
-    readonly pos: Vec2;
-    readonly offset: Vec2;
+    readonly type: 'addDraggedDecl';
+    readonly decl: DeclNode;
   } | {
-    readonly type: 'pointerMove';
-    readonly pointerId: number;
-    readonly pos: Vec2;
-    readonly region: Region;
+    readonly type: 'removeDraggedDecl';
+    readonly decl: DeclNode;
   } | {
-    readonly type: 'pointerUp';
-    readonly pointerId: number;
-    readonly region: Region;
+    readonly type: 'acceptDraggedDecl';
+    readonly decl: DeclNode;
+  } | {
+    readonly type: 'replaceNode';
+    readonly oldNode: ASTNode;
+    readonly newNode: ASTNode;
   };
 
 type CodeEditorDispatch = React.Dispatch<CodeEditorAction>;
 
-type CodeEditorDragState =
-  {
-    readonly type: 'detachingNode',
-    readonly pointerId: number,
-    readonly area: DragArea,
-    readonly node: ASTNode,
-    readonly pos: Vec2;
-    readonly offset: Vec2;
-    readonly startPos: Vec2;
-  } | {
-    readonly type: 'draggingNode',
-    readonly pointerId: number,
-    readonly node: ASTNode,
-    readonly pos: Vec2;
-    readonly offset: Vec2;
-  };
-
 interface CodeEditorState {
-  readonly dragStates: ReadonlyArray<CodeEditorDragState>;
   readonly decls: ReadonlyArray<DeclNode>;
 }
 
 const INIT_STATE: CodeEditorState = {
-  dragStates: [],
   decls: [],
 };
 
 function reducer(state: CodeEditorState, action: CodeEditorAction): CodeEditorState {
   switch (action.type) {
-    case 'pointerDownOnNode': {
+    case 'addDraggedDecl': {
+      const idx = state.decls.findIndex(decl => (decl.type === 'TmpDecl') && (decl.decl === action.decl));
+      if (idx < 0) {
+        // don't have yet, so create
+        const tmpDecl: TmpDeclNode = {type: 'TmpDecl', nid: 'tmp-'+action.decl.nid, decl: action.decl};
+        const newDecls = [...state.decls, tmpDecl];
+        return {
+          ...state,
+          decls: newDecls,
+        };
+      } else {
+        return state;
+      }
+    }
+
+    case 'removeDraggedDecl': {
+      const idx = state.decls.findIndex(decl => (decl.type === 'TmpDecl') && (decl.decl === action.decl));
+      if (idx >= 0) {
+        const newDecls = state.decls.filter((_, i) => i !== idx);
+        return {
+          ...state,
+          decls: newDecls,
+        };
+      } else {
+        return state;
+      }
+    }
+
+    case 'acceptDraggedDecl': {
+      const idx = state.decls.findIndex(decl => (decl.type === 'TmpDecl') && (decl.decl === action.decl));
+      if (idx >= 0) {
+        const newDecls = state.decls.map(decl => {
+          if ((decl.type === 'TmpDecl') && (decl.decl === action.decl)) {
+            return decl.decl;
+          } else {
+            return decl;
+          }
+        });
+        return {
+          ...state,
+          decls: newDecls,
+        };
+      } else {
+        return state;
+      }
+    }
+
+    case 'replaceNode': {
+      const {oldNode, newNode} = action;
+
+      const transform = (node: ASTNode): ASTNode => {
+        if (node === oldNode) {
+          return newNode;
+        } else {
+          return transformChildren(node, transform, undefined);
+        }
+      }
+
+      const newRootDecls = transformNodeArr(state.decls, isDeclNode, transform);
+
       return {
         ...state,
-        dragStates: state.dragStates.concat([{
-          type: 'detachingNode',
-          pointerId: action.pointerId,
-          area: action.area,
-          node: action.node,
-          pos: action.pos,
-          offset: action.offset,
-          startPos: action.pos,
-        }]),
+        decls: newRootDecls,
       };
-    }
-
-    case 'pointerMove': {
-      const ds = state.dragStates.find(s => s.pointerId === action.pointerId);
-      if (ds === undefined) {
-        return state;
-      } else {
-        switch (ds.type) {
-          case 'detachingNode': {
-            const dist = vec2dist(action.pos, ds.startPos);
-            if (dist > 10) {
-              const newDs: CodeEditorDragState = {
-                type: 'draggingNode',
-                pointerId: ds.pointerId,
-                node: ds.node,
-                pos: action.pos,
-                offset: ds.offset,
-              };
-
-              return {
-                ...state,
-                dragStates: state.dragStates.map(s => (s === ds) ? newDs : s),
-              };
-            } else {
-              return state;
-            }
-          }
-
-          case 'draggingNode': {
-            const newDs: CodeEditorDragState = {
-              ...ds,
-              pos: action.pos,
-            };
-
-            return {
-              ...state,
-              dragStates: state.dragStates.map(s => (s === ds) ? newDs : s),
-            };
-          }
-        }
-      }
-    }
-
-    case 'pointerUp': {
-      const ds = state.dragStates.find(s => s.pointerId === action.pointerId);
-      if (ds === undefined) {
-        return state;
-      } else {
-        switch (ds.type) {
-          case 'detachingNode': {
-            return {
-              ...state,
-              dragStates: state.dragStates.filter(s => s !== ds),
-            };
-          }
-
-          case 'draggingNode': {
-            let newDecls = state.decls;
-            if (action.region.type === 'codeBg') {
-              const node = ds.node
-              if (isDeclNode(ds.node)) {
-                newDecls = newDecls.concat([ds.node]);
-              }
-            }
-
-            return {
-              ...state,
-              dragStates: state.dragStates.filter(s => s !== ds),
-              decls: newDecls,
-            };
-          }
-
-          default:
-            throw new Error('unimplemented');
-        }
-      }
     }
   }
 }
 
-const CodeEditor: React.FC = () => {
+const CodeEditor: React.FC<{editorCtx: EditorContext<Code, undefined>}> = ({editorCtx}) => {
+  const [state, dispatch] = useReducer(reducer, INIT_STATE);
+
+  const editorRef = useRef<HTMLDivElement>(null);
+
   const fnIfaces: ReadonlyArray<[NodeId, FnExtIface]> = [
     ['gt', {
       tmpl: '{a|A} is greater than {b|B}',
@@ -410,115 +524,101 @@ const CodeEditor: React.FC = () => {
   });
 
   const paletteNodes: ReadonlyArray<ASTNode> = [
-    ...fnIfaces.map(([nid, iface]) => makeFnApp(nid, iface)),
+    ...fnIfaces.map(([nid, iface]) => makeFnApp('palette-'+nid, nid, iface)),
     {
       type: 'Eq',
-      nid: 'eq',
+      nid: 'palette-eq',
       lhs: {type: 'Hole', nid: 'eq_lhs'},
       rhs: {type: 'Hole', nid: 'eq_rhs'},
     },
   ];
 
-  const [state, dispatch] = useReducer(reducer, INIT_STATE);
+  const handlePointerMove = (e: React.PointerEvent) => {
+    const ne = e.nativeEvent as PointerEvent;
+    const dv = (ne as any).draggingValue as (ValueDragInfo | undefined);
+    if (!dv) {
+      return;
+    }
+    if (dv.typeId !== 'codeEditor/node') {
+      return;
+    }
+    const draggedNode = dv.value as ASTNode;
 
-  const handlePointerMove = (e: PointerEvent, region: Region) => {
-    dispatch({
-      type: 'pointerMove',
-      pointerId: e.pointerId,
-      pos: {x: e.clientX, y: e.clientY},
-      region,
-    });
+    if (!editorRef.current) {
+      return;
+    }
+    const codeArea = editorRef.current.querySelector('.CodeEditor-code');
+    invariant(codeArea);
+    const codeAreaRect = codeArea.getBoundingClientRect();
+    const insideCodeArea = pointInRect({x: ne.clientX, y: ne.clientY}, codeAreaRect);
+
+    if (insideCodeArea) {
+      // inside code area
+      // create or move tmp node for this dragged node
+      if (isDeclNode(draggedNode)) {
+        dispatch({type: 'addDraggedDecl', decl: draggedNode});
+      }
+    } else {
+      // not inside code area
+      // if we have a Tmp node for this drag, remove it
+      if (isDeclNode(draggedNode)) {
+        dispatch({type: 'removeDraggedDecl', decl: draggedNode});
+      }
+    }
   };
 
-  const handlePointerUp = (e: PointerEvent, region: Region) => {
-    dispatch({
-      type: 'pointerUp',
-      pointerId: e.pointerId,
-      region,
-    });
+  const handlePointerUp = (e: React.PointerEvent) => {
+    const ne = e.nativeEvent as PointerEvent;
+    const dv = (ne as any).draggingValue as (ValueDragInfo | undefined);
+    if (!dv) {
+      return;
+    }
+    if (dv.typeId !== 'codeEditor/node') {
+      return;
+    }
+    const draggedNode = dv.value as ASTNode;
+
+    // "unwrap" matching tmp decl
+    if (isDeclNode(draggedNode)) {
+      dispatch({type: 'acceptDraggedDecl', decl: draggedNode});
+    } else {
+      // ignore for now
+    }
   };
-
-  useEffect(() => {
-    const windowHandlePointerMove = (e: PointerEvent) => {
-      handlePointerMove(e, {type: 'other'});
-    };
-
-    const windowHandlePointerUp = (e: PointerEvent) => {
-      handlePointerUp(e, {type: 'other'});
-    };
-
-    window.addEventListener('pointermove', windowHandlePointerMove, false);
-    window.addEventListener('pointerup', windowHandlePointerUp, false);
-
-     return () => {
-       window.removeEventListener('pointermove', windowHandlePointerMove, false);
-       window.removeEventListener('pointerup', windowHandlePointerUp, false);
-     };
-   });
 
   return (
-    <div className="CodeEditor">
+    <div
+      className="CodeEditor"
+      onPointerMove={handlePointerMove}
+      onPointerUp={handlePointerUp}
+      ref={editorRef}
+    >
       <div className="CodeEditor-palette">
         {paletteNodes.map((node) => (
           <NodeView
+            key={node.nid}
             node={node}
             ctx={{
+              kind: 'palette',
               varAn,
               dispatch,
-              area: 'palette',
               dragNode: node,
+              editorCtx,
             }}
           />
         ))}
       </div>
-      <div
-        className="CodeEditor-code"
-        onPointerMove={e => handlePointerMove(e.nativeEvent, {type: 'codeBg'})}
-        onPointerUp={e => handlePointerUp(e.nativeEvent, {type: 'codeBg'})}
-      >
-        <BlockVList>
-          {state.decls.map((decl) => (
-            <NodeView
-              node={decl}
-              ctx={{
-                varAn,
-                dispatch,
-                area: 'code',
-                dragNode: decl,
-              }}
-            />
-          ))}
-        </BlockVList>
-      </div>
-      <div className="CodeEditor-drags">
-        {state.dragStates.map(ds => {
-          switch (ds.type) {
-            case 'draggingNode': {
-              const adjPos = vec2sub(ds.pos, ds.offset);
-              return (
-                <div
-                  key={ds.pointerId}
-                  style={{
-                    position: 'absolute',
-                    left: adjPos.x,
-                    top: adjPos.y,
-                  }}
-                >
-                  <NodeView
-                    node={ds.node}
-                    ctx={{
-                      varAn,
-                      dispatch,
-                      area: 'drag',
-                      dragNode: ds.node,
-                    }}
-                  />
-                </div>
-              );
-            }
-          }
-          return null;
-        })}
+      <div className="CodeEditor-code">
+        <DeclListView
+          decls={state.decls}
+          ctx={{
+            kind: 'code-regular',
+            varAn,
+            dispatch,
+            dragNode: undefined,
+            editorCtx,
+          }}
+        />
       </div>
     </div>
   );
@@ -542,7 +642,7 @@ const codeEditor: Editor<Code, undefined> = {
         const root = ReactDOM.createRoot(context.container);
         root.render(
           <React.StrictMode>
-            <CodeEditor />
+            <CodeEditor editorCtx={context} />
           </React.StrictMode>
         );
         unmount = () => {

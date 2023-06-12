@@ -3,9 +3,15 @@ import { EVWrapper } from "./ev";
 export type PointerID = 'mouse' | number;
 
 // attached to DOM events pointermove, pointerup
-export interface AttachedDragData {
+export interface EVDragInfo {
   readonly ev: EVWrapper<any>
   readonly size: number;
+  readonly offset: {x: number, y: number};
+}
+
+export interface ValueDragInfo {
+  readonly typeId: string;
+  readonly value: any;
   readonly offset: {x: number, y: number};
 }
 
@@ -26,6 +32,19 @@ export interface EditorContext<T, C> {
    * The EV this editor is editing
    */
   readonly ev: EVWrapper<T>;
+
+  /**
+   * Begin a drag of a value/object that is NOT an EV.
+   */
+  readonly beginDrag: (
+    typeId: string,
+    pointerId: PointerID,
+    value: any,
+    pos: {x: number, y: number},
+    node: HTMLElement | undefined,
+    offset: {x: number, y: number},
+    // TODO: optional callback(s) to get notified of drag end, etc.
+  ) => void;
 }
 
 export interface EditorReturn<T> {

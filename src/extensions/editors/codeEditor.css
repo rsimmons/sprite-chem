@@ -18,11 +18,8 @@
   margin-bottom: 1em;
 }
 
-.CodeEditor-code {
-}
-
 .CodeEditor-block {
-  width: fit-content;
+  width: max-content;
   background: white;
   border: 1px solid #ccc;
   border-radius: 0.5em;
@@ -34,6 +31,23 @@
   align-items: center;
   flex-direction: row;
   gap: 0.5em;
+}
+
+.CodeEditor-block-vlist {
+  border-right: 1px solid #ccc;
+  padding: 1em;
+  overflow-x: hidden;
+  overflow-y: auto;
+  touch-action: pan-y;
+}
+
+.CodeEditor-block-vlist > *:not(:last-child) {
+  margin-bottom: 0.5em;
+}
+
+.CodeEditor-tmp-node {
+  opacity: 0.5;
+  width: max-content;
 }
 
 .CodeEditor-hole {

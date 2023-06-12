@@ -1,5 +1,5 @@
 import { Sprite } from '../types/sprite';
-import { Editor, AttachedDragData } from '../../extlib/editor';
+import { Editor, EVDragInfo } from '../../extlib/editor';
 import { SpriteWorldSetup } from '../types/spriteWorldSetup';
 import { createRenderCanvas, SpriteInstances } from '../../extshared/spriteWorld';
 import { invariant } from '../../util';
@@ -63,8 +63,8 @@ const spriteWorldSetupEditor: Editor<SpriteWorldSetup, undefined> = {
       };
     });
 
-    const getEventDragData = (e: PointerEvent): AttachedDragData | undefined => {
-      return (e as any).draggingEV as (AttachedDragData | undefined);
+    const getEventDragData = (e: PointerEvent): EVDragInfo | undefined => {
+      return (e as any).draggingEV as (EVDragInfo | undefined);
     }
 
     const handlePointerUp = (e: PointerEvent) => {
