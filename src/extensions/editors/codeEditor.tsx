@@ -3,7 +3,7 @@ import ReactDOM from 'react-dom/client';
 import { Editor, EditorContext, ValueDragInfo } from '../../extlib/editor';
 import { genUidRandom, invariant } from '../../util';
 import { Vec2, vec2dist, vec2sub } from '../../vec';
-import { ASTNode, Code, DeclNode, EqNode, FnAppNode, HoleNode, isBindExprNode, isDeclNode, isValueExprNode, Name, NodeId, TmpDeclNode, ValueExprNode, VarRefNode } from '../types/code';
+import { ASTNode, Code, DeclNode, EqNode, FnAppNode, HoleNode, isBindExprNode, isDeclNode, isValueExprNode, Name, NodeId, TmpDeclNode, ValueExprNode, VarNameNode, VarRefNode } from '../types/code';
 import './codeEditor.css';
 
 interface Rect {
@@ -62,7 +62,7 @@ function transformChildren<N extends ASTNode, X>(node: N, transform: (node: ASTN
   switch (node.type) {
     case 'Hole':
     case 'VarRef':
-    case 'VarBind':
+    case 'VarName':
       // no children
       return node;
 
@@ -191,7 +191,8 @@ interface FnExtIface {
 
 type Type =
   | {type: 'Fn', iface: FnExtIface}
-  | {type: 'Num'};
+  | {type: 'Num'}
+  | {type: 'Vec2'};
 
 interface Analysis {
   readonly type: Type;
@@ -211,16 +212,17 @@ function makeFnApp(nid: NodeId, fnNid: NodeId, fnIface: FnExtIface): ASTNode {
   };
 }
 
-const Block: React.FC<{children: React.ReactNode, ctx: NodeViewCtx}> = ({children, ctx}) => {
+const Block: React.FC<{children: React.ReactNode, node: ASTNode, ctx: NodeViewCtx}> = ({children, node, ctx}) => {
   const blockElem = useRef<HTMLDivElement>(null);
 
   const handlePointerDown = (e: React.PointerEvent) => {
     e.preventDefault();
 
-    if (!ctx.dragNode) {
-      // not draggable
+    if (ctx.allowDrag === 'no') {
       return;
     }
+
+    e.stopPropagation();
 
     // release capture if we implicitly got it (happens with touch by default)
     if (!(e.target instanceof HTMLElement)) {
@@ -241,7 +243,7 @@ const Block: React.FC<{children: React.ReactNode, ctx: NodeViewCtx}> = ({childre
     };
 
     // TODO: if we're dragging a tree of more than one node, need to "deep"-regenerate new node ids for all of them
-    const dragNode: ASTNode = (ctx.kind === 'palette') ? {...ctx.dragNode, nid: genUidRandom()} : ctx.dragNode;
+    const dragNode: ASTNode = (ctx.kind === 'palette') ? {...node, nid: genUidRandom()} : node;
 
     if (ctx.kind === 'code-regular') {
       if (!isDeclNode(dragNode)) {
@@ -301,8 +303,9 @@ type NodeViewCtxKind = 'palette' | 'code-regular' | 'code-tmp';
 interface NodeViewCtx {
   readonly kind: NodeViewCtxKind;
   readonly varAn: ReadonlyMap<NodeId, Analysis>;
+  readonly varName: ReadonlyMap<NodeId, VarNameNode>;
   readonly dispatch: CodeEditorDispatch;
-  readonly dragNode: ASTNode | undefined;
+  readonly allowDrag: 'yes' | 'no' | 'no-children';
   readonly editorCtx: EditorContext<Code, undefined>;
 }
 
@@ -316,8 +319,10 @@ const FnAppView: React.FC<{node: FnAppNode, ctx: NodeViewCtx}> = ({node, ctx}) =
   invariant(fnAn.type.type === 'Fn');
   const parsed = parseFnTmplText(fnAn.type.iface.tmpl);
 
+  const childCtx = {...ctx, allowDrag: (ctx.allowDrag === 'no-children') ? 'no' : ctx.allowDrag};
+
   return (
-    <Block ctx={ctx}>
+    <Block node={node} ctx={ctx}>
       {parsed.lines.map((line, idx) => (
         <BlockLine key={idx}>
           {line.map((item, idx) => {
@@ -330,7 +335,7 @@ const FnAppView: React.FC<{node: FnAppNode, ctx: NodeViewCtx}> = ({node, ctx}) =
                 // TODO: make use of item.label if arg node is a hole?
                 const arg = node.args.get(item.pid);
                 invariant(arg);
-                return <NodeView key={idx} node={arg} ctx={ctx} />
+                return <NodeView key={item.pid} node={arg} ctx={childCtx} />
               }
 
               default:
@@ -344,45 +349,47 @@ const FnAppView: React.FC<{node: FnAppNode, ctx: NodeViewCtx}> = ({node, ctx}) =
 };
 
 const VarRefView: React.FC<{node: VarRefNode, ctx: NodeViewCtx}> = ({node, ctx}) => {
+  const refNode = ctx.varName.get(node.refId);
+  invariant(refNode !== undefined);
   return (
-    <Block ctx={ctx}>
+    <Block node={node} ctx={ctx}>
       <BlockLine>
-        <BlockLineText text={`VarRef:${node.refId}`} />
+        <BlockLineText text={refNode.name} />
       </BlockLine>
     </Block>
   );
 };
 
 const EqView: React.FC<{node: EqNode, ctx: NodeViewCtx}> = ({node, ctx}) => {
+  const childCtx = {...ctx, allowDrag: (ctx.allowDrag === 'no-children') ? 'no' : ctx.allowDrag};
+
   return (
-    <Block ctx={ctx}>
+    <Block node={node} ctx={ctx}>
       <BlockLine>
-        <NodeView node={node.lhs} ctx={ctx} />
+        <NodeView node={node.lhs} ctx={childCtx} />
         <BlockLineText text="=" />
-        <NodeView node={node.rhs} ctx={ctx} />
+        <NodeView node={node.rhs} ctx={childCtx} />
       </BlockLine>
     </Block>
   );
 };
 
 const NodeView: React.FC<{node: ASTNode, ctx: NodeViewCtx}> = ({node, ctx}) => {
-  const newCtx = {...ctx, dragNode: (ctx.kind === 'code-regular') ? node : ctx.dragNode};
-
   switch (node.type) {
     case 'Hole':
-      return <HoleView node={node} ctx={newCtx} />
+      return <HoleView key={node.nid} node={node} ctx={ctx} />
 
     case 'FnApp':
-      return <FnAppView node={node} ctx={newCtx} />
+      return <FnAppView key={node.nid} node={node} ctx={ctx} />
 
     case 'VarRef':
-      return <VarRefView node={node} ctx={newCtx} />
+      return <VarRefView key={node.nid} node={node} ctx={ctx} />
 
     case 'Eq':
-      return <EqView node={node} ctx={newCtx} />
+      return <EqView key={node.nid} node={node} ctx={ctx} />
 
     case 'TmpDecl':
-      return <div className="CodeEditor-tmp-node"><NodeView node={node.decl} ctx={{...ctx, kind: 'code-tmp', dragNode: undefined}} /></div>
+      return <div key={node.nid} className="CodeEditor-tmp-node"><NodeView node={node.decl} ctx={{...ctx, kind: 'code-tmp'}} /></div>
 
     default:
       throw new Error('unimplemented');
@@ -517,10 +524,23 @@ const CodeEditor: React.FC<{editorCtx: EditorContext<Code, undefined>}> = ({edit
     }],
   ];
 
+  // the "named returns" of the implicit top-level function, with their expected types
+  const topReturns: ReadonlyArray<[ASTNode, Type]> = [
+    [{type: 'VarName', nid: 'moveTarget', name: 'move target'}, {type: 'Vec2'}],
+    [{type: 'VarName', nid: 'moveSpeed', name: 'move speed'}, {type: 'Num'}],
+  ];
+
   const varAn: Map<NodeId, Analysis> = new Map();
 
   fnIfaces.forEach(([nid, iface]) => {
     varAn.set(nid, {type: {type: 'Fn', iface}})
+  });
+
+  const varName: Map<NodeId, VarNameNode> = new Map();
+
+  topReturns.forEach(([node, _]) => {
+    invariant(node.type === 'VarName');
+    varName.set(node.nid, node);
   });
 
   const paletteNodes: ReadonlyArray<ASTNode> = [
@@ -529,6 +549,18 @@ const CodeEditor: React.FC<{editorCtx: EditorContext<Code, undefined>}> = ({edit
       type: 'Eq',
       nid: 'palette-eq',
       lhs: {type: 'Hole', nid: 'eq_lhs'},
+      rhs: {type: 'Hole', nid: 'eq_rhs'},
+    },
+    {
+      type: 'Eq',
+      nid: 'palette-return-move-target',
+      lhs: {type: 'VarRef', nid: 'eq_lhs', refId: 'moveTarget'},
+      rhs: {type: 'Hole', nid: 'eq_rhs'},
+    },
+    {
+      type: 'Eq',
+      nid: 'palette-return-move-speed',
+      lhs: {type: 'VarRef', nid: 'eq_lhs', refId: 'moveSpeed'},
       rhs: {type: 'Hole', nid: 'eq_rhs'},
     },
   ];
@@ -601,8 +633,9 @@ const CodeEditor: React.FC<{editorCtx: EditorContext<Code, undefined>}> = ({edit
             ctx={{
               kind: 'palette',
               varAn,
+              varName,
               dispatch,
-              dragNode: node,
+              allowDrag: 'no-children',
               editorCtx,
             }}
           />
@@ -614,8 +647,9 @@ const CodeEditor: React.FC<{editorCtx: EditorContext<Code, undefined>}> = ({edit
           ctx={{
             kind: 'code-regular',
             varAn,
+            varName,
             dispatch,
-            dragNode: undefined,
+            allowDrag: 'yes',
             editorCtx,
           }}
         />

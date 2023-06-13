@@ -28,8 +28,8 @@ export interface VarRefNode {
   readonly refId: NodeId;
 }
 
-export interface VarBindNode {
-  readonly type: 'VarBind';
+export interface VarNameNode {
+  readonly type: 'VarName';
   readonly nid: NodeId;
   readonly name: Name;
 }
@@ -71,10 +71,11 @@ export function isValueExprNode(node: ASTNode): node is ValueExprNode {
 }
 
 export type BindExprNode =
-  | VarBindNode
+  | VarNameNode
+  | VarRefNode // for setting named returns
   | HoleNode;
 export function isBindExprNode(node: ASTNode): node is BindExprNode {
-  return (node.type === 'VarBind') || (node.type === 'Hole');
+  return (node.type === 'VarName') || (node.type === 'VarRef') || (node.type === 'Hole');
 }
 
 export type StmtNode =
