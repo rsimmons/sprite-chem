@@ -3,7 +3,7 @@ import ReactDOM from 'react-dom/client';
 import { Editor, EditorContext, ValueDragInfo } from '../../extlib/editor';
 import { genUidRandom, invariant } from '../../util';
 import { Vec2, vec2dist, vec2sub } from '../../vec';
-import { ASTNode, Code, DeclNode, EqNode, FnAppNode, HoleNode, isBindExprNode, isDeclNode, isValueExprNode, Name, NodeId, TmpDeclNode, ValueExprNode, VarNameNode, VarRefNode } from '../types/code';
+import { ASTNode, Code, DeclNode, EqNode, FnAppNode, HoleNode, isBindExprNode, isDeclNode, isValueExprNode, LiteralNode, Name, NodeId, TmpDeclNode, ValueExprNode, VarNameNode, VarRefNode } from '../types/code';
 import './codeEditor.css';
 
 interface Rect {
@@ -61,6 +61,7 @@ function transformChildren<N extends ASTNode, X>(node: N, transform: (node: ASTN
 
   switch (node.type) {
     case 'Hole':
+    case 'Literal':
     case 'VarRef':
     case 'VarName':
       // no children
@@ -216,6 +217,10 @@ const Block: React.FC<{children: React.ReactNode, node: ASTNode, ctx: NodeViewCt
   const blockElem = useRef<HTMLDivElement>(null);
 
   const handlePointerDown = (e: React.PointerEvent) => {
+    if ((e.target as Element).tagName === 'INPUT') {
+      return;
+    }
+
     e.preventDefault();
 
     if (ctx.allowDrag === 'no') {
@@ -309,8 +314,53 @@ interface NodeViewCtx {
   readonly editorCtx: EditorContext<Code, undefined>;
 }
 
-const HoleView: React.FC<{node: HoleNode, ctx: NodeViewCtx}> = ({node}) => {
+const HoleView: React.FC<{node: HoleNode, ctx: NodeViewCtx}> = () => {
   return <div className="CodeEditor-hole"></div>
+};
+
+const LiteralView: React.FC<{node: LiteralNode, ctx: NodeViewCtx}> = ({node, ctx}) => {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    let newValue: string | number | boolean;
+    switch (node.subtype) {
+      case 'string':
+        newValue = e.target.value;
+        break;
+
+      case 'number':
+        newValue = Number(e.target.value);
+        break;
+
+      default:
+        throw new Error('unimplemented: ' + node.subtype);
+    }
+
+    ctx.dispatch({
+      type: 'replaceNode',
+      oldNode: node,
+      newNode: {
+        ...node,
+        value: newValue,
+      },
+    });
+  };
+  return (
+    <Block node={node} ctx={ctx}>
+      <BlockLine>
+        {(() => {
+          switch (node.subtype) {
+            case 'string':
+              return <input type="text" value={node.value} onChange={handleChange} />
+
+            case 'number':
+              return <input type="number" value={node.value} onChange={handleChange} />
+
+            default:
+              throw new Error('unimplemented: ' + node.subtype);
+          }
+        })()}
+      </BlockLine>
+    </Block>
+  );
 };
 
 const FnAppView: React.FC<{node: FnAppNode, ctx: NodeViewCtx}> = ({node, ctx}) => {
@@ -378,6 +428,9 @@ const NodeView: React.FC<{node: ASTNode, ctx: NodeViewCtx}> = ({node, ctx}) => {
   switch (node.type) {
     case 'Hole':
       return <HoleView key={node.nid} node={node} ctx={ctx} />
+
+    case 'Literal':
+      return <LiteralView key={node.nid} node={node} ctx={ctx} />
 
     case 'FnApp':
       return <FnAppView key={node.nid} node={node} ctx={ctx} />
@@ -484,8 +537,11 @@ function reducer(state: CodeEditorState, action: CodeEditorAction): CodeEditorSt
     case 'replaceNode': {
       const {oldNode, newNode} = action;
 
+      let replaceCount = 0;
+
       const transform = (node: ASTNode): ASTNode => {
         if (node === oldNode) {
+          replaceCount++;
           return newNode;
         } else {
           return transformChildren(node, transform, undefined);
@@ -493,6 +549,8 @@ function reducer(state: CodeEditorState, action: CodeEditorAction): CodeEditorSt
       }
 
       const newRootDecls = transformNodeArr(state.decls, isDeclNode, transform);
+
+      invariant(replaceCount === 1, 'expected exactly one node to be replaced');
 
       return {
         ...state,
@@ -562,6 +620,18 @@ const CodeEditor: React.FC<{editorCtx: EditorContext<Code, undefined>}> = ({edit
       nid: 'palette-return-move-speed',
       lhs: {type: 'VarRef', nid: 'eq_lhs', refId: 'moveSpeed'},
       rhs: {type: 'Hole', nid: 'eq_rhs'},
+    },
+    {
+      type: 'Literal',
+      nid: 'palette-number-',
+      subtype: 'number',
+      value: 0,
+    },
+    {
+      type: 'Eq',
+      nid: 'palette-return-move-speed-num',
+      lhs: {type: 'VarRef', nid: 'eq_lhs', refId: 'moveSpeed'},
+      rhs: {type: 'Literal', nid: 'eq_rhs', subtype: 'number', value: 10},
     },
   ];
 

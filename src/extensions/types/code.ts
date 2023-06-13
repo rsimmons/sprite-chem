@@ -7,6 +7,13 @@ export interface HoleNode {
   readonly nid: NodeId;
 }
 
+export interface LiteralNode {
+  readonly type: 'Literal';
+  readonly nid: NodeId;
+  readonly subtype: 'number' | 'string' | 'boolean';
+  readonly value: any;
+}
+
 // note that we don't allow applying arbitrary expressions, to simplify for now
 export interface FnAppNode {
   readonly type: 'FnApp';
@@ -64,10 +71,11 @@ export function isDeclNode(node: ASTNode): node is DeclNode {
 
 export type ValueExprNode =
   | HoleNode
+  | LiteralNode
   | VarRefNode
   | FnAppNode;
 export function isValueExprNode(node: ASTNode): node is ValueExprNode {
-  return (node.type === 'Hole') || (node.type === 'VarRef') || (node.type === 'FnApp');
+  return (node.type === 'Hole') || (node.type === 'Literal') || (node.type === 'VarRef') || (node.type === 'FnApp');
 }
 
 export type BindExprNode =

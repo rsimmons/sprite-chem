@@ -58,6 +58,10 @@
   color: #ccc;
 }
 
+.CodeEditor-block input {
+  width: 3em;
+}
+
 .CodeEditor-drags {
   pointer-events: none;
   touch-action: none;
