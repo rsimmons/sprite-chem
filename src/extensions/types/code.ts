@@ -55,18 +55,11 @@ export interface EmitNode {
   readonly expr: ValueExprNode; // the value we are emitting
 }
 
-export interface TmpDeclNode {
-  readonly type: 'TmpDecl';
-  readonly nid: NodeId;
-  readonly decl: DeclNode;
-}
-
 export type DeclNode =
   | WhenNode
   | EqNode
-  | TmpDeclNode;
 export function isDeclNode(node: ASTNode): node is DeclNode {
-  return (node.type === 'When') || (node.type === 'Eq') || (node.type === 'TmpDecl');
+  return (node.type === 'When') || (node.type === 'Eq');
 }
 
 export type ValueExprNode =

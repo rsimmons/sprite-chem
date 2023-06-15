@@ -34,15 +34,20 @@
 }
 
 .CodeEditor-block-vlist {
-  border-right: 1px solid #ccc;
-  padding: 1em;
+  padding: 0 1em;
   overflow-x: hidden;
   overflow-y: auto;
   touch-action: pan-y;
 }
 
-.CodeEditor-block-vlist > *:not(:last-child) {
-  margin-bottom: 0.5em;
+.CodeEditor-block-vlist-sep {
+  height: 2px;
+  margin-top: 0.2em;
+  margin-bottom: 0.2em;
+}
+
+.CodeEditor-block-vlist-sep-highlight {
+  background: green;
 }
 
 .CodeEditor-tmp-node {

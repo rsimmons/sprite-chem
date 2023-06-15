@@ -1,9 +1,9 @@
 import React, { useReducer, useRef } from 'react';
 import ReactDOM from 'react-dom/client';
 import { Editor, EditorContext, ValueDragInfo } from '../../extlib/editor';
-import { genUidRandom, invariant } from '../../util';
+import { genUidRandom, insertIntoArray, invariant } from '../../util';
 import { Vec2, vec2dist, vec2sub } from '../../vec';
-import { ASTNode, Code, DeclNode, EqNode, FnAppNode, HoleNode, isBindExprNode, isDeclNode, isValueExprNode, LiteralNode, Name, NodeId, TmpDeclNode, ValueExprNode, VarNameNode, VarRefNode } from '../types/code';
+import { ASTNode, Code, DeclNode, EqNode, FnAppNode, HoleNode, isBindExprNode, isDeclNode, isValueExprNode, LiteralNode, Name, NodeId, ValueExprNode, VarNameNode, VarRefNode } from '../types/code';
 import './codeEditor.css';
 
 interface Rect {
@@ -100,19 +100,6 @@ function transformChildren<N extends ASTNode, X>(node: N, transform: (node: ASTN
 
     case 'Emit':
       throw new Error('unimplemented');
-
-    case 'TmpDecl': {
-      const newDecl = xChild(node.decl, isDeclNode);
-
-      if (newDecl === node.decl) {
-        return node;
-      } else {
-        return {
-          ...node,
-          decl: newDecl,
-        };
-      }
-    }
   }
 }
 
@@ -247,24 +234,13 @@ const Block: React.FC<{children: React.ReactNode, node: ASTNode, ctx: NodeViewCt
       y: e.clientY - rect.top,
     };
 
-    // TODO: if we're dragging a tree of more than one node, need to "deep"-regenerate new node ids for all of them
+    // TODO: if we're dragging a tree of more than one node, we need to "deep"-regenerate new node ids for all of them
     const dragNode: ASTNode = (ctx.kind === 'palette') ? {...node, nid: genUidRandom()} : node;
 
-    if (ctx.kind === 'code-regular') {
-      if (!isDeclNode(dragNode)) {
-        throw new Error('unimplemented');
-      }
-
-      // TODO: wrap this decl node in a TmpDecl node, dispatch action to update AST
-      const newNode: TmpDeclNode = {
-        type: 'TmpDecl',
-        nid: genUidRandom(),
-        decl: dragNode,
-      };
+    if (ctx.kind === 'code') {
       ctx.dispatch({
-        type: 'replaceNode',
-        oldNode: dragNode,
-        newNode,
+        type: 'removeNodeForDrag',
+        node: dragNode,
       });
     }
 
@@ -300,11 +276,28 @@ const BlockLineText: React.FC<{text: string}> = ({text}) => {
   return <div className="CodeEditor-block-line-text">{text}</div>
 };
 
-const BlockVList: React.FC<{children: React.ReactNode}> = ({children}) => {
-  return <div className="CodeEditor-block-vlist">{children}</div>
+const BlockVListSep: React.FC<{idx: number, parentNodeId: NodeId | undefined, hl: boolean}> = ({idx, parentNodeId, hl}) => {
+  return <div className={'CodeEditor-block-vlist-sep' + (hl ? ' CodeEditor-block-vlist-sep-highlight': '')} data-parent-node-id={parentNodeId} data-index={idx} />;
+}
+
+const BlockVList: React.FC<{childViews: ReadonlyArray<React.ReactNode>, dropIdxs: ReadonlySet<number>, parentNodeId: NodeId | undefined}> = ({childViews, dropIdxs, parentNodeId}) => {
+  return (
+    <div className="CodeEditor-block-vlist">
+      {(childViews.length > 0) ? childViews.map((child, idx) => (
+        <React.Fragment>
+          <BlockVListSep idx={idx} parentNodeId={parentNodeId} hl={dropIdxs.has(idx)} />
+          {child}
+
+          {(idx === (childViews.length-1)) &&
+            <BlockVListSep idx={idx+1} parentNodeId={parentNodeId} hl={dropIdxs.has(idx+1)} />
+          }
+        </React.Fragment>
+      )) : <BlockVListSep idx={0} parentNodeId={parentNodeId} hl={dropIdxs.has(0)} />}
+    </div>
+  );
 };
 
-type NodeViewCtxKind = 'palette' | 'code-regular' | 'code-tmp';
+type NodeViewCtxKind = 'palette' | 'code';
 interface NodeViewCtx {
   readonly kind: NodeViewCtxKind;
   readonly varAn: ReadonlyMap<NodeId, Analysis>;
@@ -312,6 +305,7 @@ interface NodeViewCtx {
   readonly dispatch: CodeEditorDispatch;
   readonly allowDrag: 'yes' | 'no' | 'no-children';
   readonly editorCtx: EditorContext<Code, undefined>;
+  readonly dropLocs: ReadonlyArray<DropLoc>;
 }
 
 const HoleView: React.FC<{node: HoleNode, ctx: NodeViewCtx}> = () => {
@@ -441,52 +435,75 @@ const NodeView: React.FC<{node: ASTNode, ctx: NodeViewCtx}> = ({node, ctx}) => {
     case 'Eq':
       return <EqView key={node.nid} node={node} ctx={ctx} />
 
-    case 'TmpDecl':
-      return <div key={node.nid} className="CodeEditor-tmp-node"><NodeView node={node.decl} ctx={{...ctx, kind: 'code-tmp'}} /></div>
-
     default:
       throw new Error('unimplemented');
   }
 };
 
-const DeclListView: React.FC<{decls: ReadonlyArray<DeclNode>, ctx: NodeViewCtx}> = ({decls, ctx}) => {
-  return (
-    <BlockVList>
-      {decls.map(decl => (
-        <NodeView key={decl.nid} node={decl} ctx={ctx} />
-      ))}
-    </BlockVList>
-  );
+const DeclListView: React.FC<{decls: ReadonlyArray<DeclNode>, parentNode: ASTNode | null, ctx: NodeViewCtx}> = ({decls, parentNode, ctx}) => {
+  const childViews = decls.map(decl => <NodeView key={decl.nid} node={decl} ctx={ctx} />);
+
+  const dropIdxs: Set<number> = new Set();
+  for (const dropLoc of ctx.dropLocs) {
+    if ((dropLoc.type === 'intoTopList') && (parentNode === null)) {
+      dropIdxs.add(dropLoc.idx);
+    } else if ((dropLoc.type === 'intoList') && (dropLoc.nodeId === parentNode?.nid)) {
+      dropIdxs.add(dropLoc.idx);
+    }
+  }
+
+  return <BlockVList childViews={childViews} dropIdxs={dropIdxs} parentNodeId={parentNode?.nid} />;
 }
+
+type DropLoc =
+  {
+    readonly type: 'ontoNode';
+    readonly nodeId: NodeId;
+  } | {
+    readonly type: 'intoList';
+    readonly nodeId: NodeId; // node which has a child list
+    readonly idx: number; // may equal list length to go after last
+  } | {
+    // as 'intoList' but for the top-level decl list
+    readonly type: 'intoTopList';
+    readonly idx: number;
+  };
 
 type CodeEditorAction =
   {
-    readonly type: 'addDraggedDecl';
-    readonly decl: DeclNode;
-  } | {
-    readonly type: 'removeDraggedDecl';
-    readonly decl: DeclNode;
-  } | {
-    readonly type: 'acceptDraggedDecl';
-    readonly decl: DeclNode;
-  } | {
     readonly type: 'replaceNode';
     readonly oldNode: ASTNode;
     readonly newNode: ASTNode;
+  } | {
+    readonly type: 'removeNodeForDrag';
+    readonly node: ASTNode;
+  } | {
+    readonly type: 'setNodeDragDropLoc';
+    readonly node: ASTNode;
+    readonly dropLoc: DropLoc;
+  } | {
+    readonly type: 'removeNodeDragDropLoc';
+    readonly node: ASTNode;
+  } | {
+    readonly type: 'endNodeDrag';
+    readonly node: ASTNode;
   };
 
 type CodeEditorDispatch = React.Dispatch<CodeEditorAction>;
 
 interface CodeEditorState {
   readonly decls: ReadonlyArray<DeclNode>;
+  readonly dragDropLocs: ReadonlyMap<ASTNode, DropLoc>;
 }
 
 const INIT_STATE: CodeEditorState = {
   decls: [],
+  dragDropLocs: new Map(),
 };
 
 function reducer(state: CodeEditorState, action: CodeEditorAction): CodeEditorState {
   switch (action.type) {
+    /*
     case 'addDraggedDecl': {
       const idx = state.decls.findIndex(decl => (decl.type === 'TmpDecl') && (decl.decl === action.decl));
       if (idx < 0) {
@@ -533,6 +550,7 @@ function reducer(state: CodeEditorState, action: CodeEditorAction): CodeEditorSt
         return state;
       }
     }
+    */
 
     case 'replaceNode': {
       const {oldNode, newNode} = action;
@@ -556,6 +574,75 @@ function reducer(state: CodeEditorState, action: CodeEditorAction): CodeEditorSt
         ...state,
         decls: newRootDecls,
       };
+    }
+
+    case 'removeNodeForDrag': {
+      const idx = state.decls.findIndex(decl => (action.node === decl));
+      if (idx >= 0) {
+        const newDecls = state.decls.filter((_, i) => i !== idx);
+        const newDragDropLocs = new Map(state.dragDropLocs);
+        newDragDropLocs.set(action.node, {type: 'intoTopList', idx: idx});
+        return {
+          ...state,
+          decls: newDecls,
+          dragDropLocs: newDragDropLocs,
+        };
+      } else {
+        throw new Error('unimplemented');
+      }
+    }
+
+    case 'setNodeDragDropLoc': {
+      const newDragDropLocs = new Map(state.dragDropLocs);
+      newDragDropLocs.set(action.node, action.dropLoc);
+      return {
+        ...state,
+        dragDropLocs: newDragDropLocs,
+      };
+    }
+
+    case 'removeNodeDragDropLoc': {
+      if (state.dragDropLocs.has(action.node)) {
+        const newDragDropLocs = new Map(state.dragDropLocs);
+        newDragDropLocs.delete(action.node);
+        return {
+          ...state,
+          dragDropLocs: newDragDropLocs,
+        };
+      } else {
+        return state;
+      }
+    }
+
+    case 'endNodeDrag': {
+      if (state.dragDropLocs.has(action.node)) {
+        const dropLoc = state.dragDropLocs.get(action.node);
+        invariant(dropLoc);
+
+        const newDragDropLocs = new Map(state.dragDropLocs);
+        newDragDropLocs.delete(action.node);
+
+        switch (dropLoc.type) {
+          case 'ontoNode': {
+            throw new Error('unimplemented');
+          }
+
+          case 'intoList': {
+            throw new Error('unimplemented');
+          }
+
+          case 'intoTopList': {
+            invariant(isDeclNode(action.node));
+            return {
+              ...state,
+              decls: insertIntoArray(state.decls, dropLoc.idx, action.node),
+              dragDropLocs: newDragDropLocs,
+            };
+          }
+        }
+      } else {
+        return state;
+      }
     }
   }
 }
@@ -656,16 +743,33 @@ const CodeEditor: React.FC<{editorCtx: EditorContext<Code, undefined>}> = ({edit
 
     if (insideCodeArea) {
       // inside code area
-      // create or move tmp node for this dragged node
-      if (isDeclNode(draggedNode)) {
-        dispatch({type: 'addDraggedDecl', decl: draggedNode});
+      const sepElems = codeArea.querySelectorAll('.CodeEditor-block-vlist-sep');
+      let nearestSepElem: Element | null = null;
+      let nearestSepDist = Infinity;
+      for (let i = 0; i < sepElems.length; i++) {
+        const sepElem = sepElems[i];
+        const sepRect = sepElem.getBoundingClientRect();
+        const dist = Math.abs(0.5*(sepRect.top+sepRect.bottom) - ne.clientY);
+        if (dist < nearestSepDist) {
+          nearestSepElem = sepElem;
+          nearestSepDist = dist;
+        }
+      }
+      if (nearestSepElem) {
+        invariant(nearestSepElem.getAttribute('data-parent-node-id') === null);
+        const idx = +nearestSepElem.getAttribute('data-index')!;
+        dispatch({
+          type: 'setNodeDragDropLoc',
+          node: draggedNode,
+          dropLoc: {type: 'intoTopList', idx},
+        });
       }
     } else {
       // not inside code area
-      // if we have a Tmp node for this drag, remove it
-      if (isDeclNode(draggedNode)) {
-        dispatch({type: 'removeDraggedDecl', decl: draggedNode});
-      }
+      dispatch({
+        type: 'removeNodeDragDropLoc',
+        node: draggedNode,
+      });
     }
   };
 
@@ -680,12 +784,10 @@ const CodeEditor: React.FC<{editorCtx: EditorContext<Code, undefined>}> = ({edit
     }
     const draggedNode = dv.value as ASTNode;
 
-    // "unwrap" matching tmp decl
-    if (isDeclNode(draggedNode)) {
-      dispatch({type: 'acceptDraggedDecl', decl: draggedNode});
-    } else {
-      // ignore for now
-    }
+    dispatch({
+      type: 'endNodeDrag',
+      node: draggedNode,
+    });
   };
 
   return (
@@ -707,6 +809,7 @@ const CodeEditor: React.FC<{editorCtx: EditorContext<Code, undefined>}> = ({edit
               dispatch,
               allowDrag: 'no-children',
               editorCtx,
+              dropLocs: [],
             }}
           />
         ))}
@@ -714,13 +817,15 @@ const CodeEditor: React.FC<{editorCtx: EditorContext<Code, undefined>}> = ({edit
       <div className="CodeEditor-code">
         <DeclListView
           decls={state.decls}
+          parentNode={null}
           ctx={{
-            kind: 'code-regular',
+            kind: 'code',
             varAn,
             varName,
             dispatch,
             allowDrag: 'yes',
             editorCtx,
+            dropLocs: [...state.dragDropLocs.values()],
           }}
         />
       </div>

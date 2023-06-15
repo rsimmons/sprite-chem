@@ -89,3 +89,7 @@ export function getObjId(obj: object): number {
   }
   return id;
 }
+
+export function insertIntoArray<T>(arr: ReadonlyArray<T>, idx: number, v: T): Array<T> {
+  return arr.slice(0, idx).concat([v], arr.slice(idx));
+}
