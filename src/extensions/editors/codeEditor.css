@@ -24,6 +24,17 @@
   border: 1px solid #ccc;
   border-radius: 0.5em;
   padding: 0.5em 1em;
+  cursor: grab;
+}
+
+.CodeEditor-block-highlight {
+  outline: 2px solid black;
+}
+
+.CodeEditor-block-style-hole {
+  box-shadow: inset 0 0 5px rgba(0,0,0,.25);
+  color: #ccc;
+  user-select: none;
 }
 
 .CodeEditor-block-line {
@@ -47,20 +58,13 @@
 }
 
 .CodeEditor-block-vlist-sep-highlight {
-  background: green;
+  background: black;
+  box-shadow: 0 0 3px rgba(0, 0, 0, 0.5);
 }
 
 .CodeEditor-tmp-node {
   opacity: 0.5;
   width: max-content;
-}
-
-.CodeEditor-hole {
-  width: 3em;
-  height: 3em;
-  border-radius: 0.5em;
-  box-shadow: inset 0 0 5px rgba(0,0,0,.25);
-  color: #ccc;
 }
 
 .CodeEditor-block input {

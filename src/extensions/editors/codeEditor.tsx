@@ -3,7 +3,7 @@ import ReactDOM from 'react-dom/client';
 import { Editor, EditorContext, ValueDragInfo } from '../../extlib/editor';
 import { genUidRandom, insertIntoArray, invariant } from '../../util';
 import { Vec2, vec2dist, vec2sub } from '../../vec';
-import { ASTNode, Code, DeclNode, EqNode, FnAppNode, HoleNode, isBindExprNode, isDeclNode, isValueExprNode, LiteralNode, Name, NodeId, ValueExprNode, VarNameNode, VarRefNode } from '../types/code';
+import { ASTNode, Code, DeclNode, EqNode, FnAppNode, HoleNode, isBindExprNode, isDeclNode, isProgramNode, isValueExprNode, LiteralNode, Name, NodeId, ProgramNode, ValueExprNode, VarNameNode, VarRefNode } from '../types/code';
 import './codeEditor.css';
 
 interface Rect {
@@ -17,21 +17,6 @@ function pointInRect(p: Vec2, r: Rect): boolean {
   return ((p.x >= r.left) && (p.x < (r.left+r.width)) && (p.y > r.top) && (p.y < (r.top+r.height)));
 }
 
-function transformNodeArr<N extends ASTNode>(arr: ReadonlyArray<N>, pred: (n: ASTNode) => n is N, transform: (node: ASTNode) => ASTNode): ReadonlyArray<N> {
-  let changed = false;
-  const newArr = arr.map(el => {
-    const nel = transform(el);
-    if (!pred(nel)) {
-      throw new Error();
-    }
-    if (nel !== el) {
-      changed = true;
-    }
-    return nel;
-  });
-  return changed ? newArr : arr;
-}
-
 function transformChildren<N extends ASTNode, X>(node: N, transform: (node: ASTNode, ctx: X) => ASTNode, ctx: X): N {
   // this could be factored out like transformNodeArr above
   const xChild = <C extends ASTNode>(n: C, pred: (n: ASTNode) => n is C): C => {
@@ -40,7 +25,22 @@ function transformChildren<N extends ASTNode, X>(node: N, transform: (node: ASTN
       throw new Error();
     }
     return tn;
-  }
+  };
+
+  const xChildArr = <C extends ASTNode>(arr: ReadonlyArray<C>, pred: (n: ASTNode) => n is C): ReadonlyArray<C> => {
+    let changed = false;
+    const newArr = arr.map(el => {
+      const nel = transform(el, ctx);
+      if (!pred(nel)) {
+        throw new Error();
+      }
+      if (nel !== el) {
+        changed = true;
+      }
+      return nel;
+    });
+    return changed ? newArr : arr;
+  };
 
   // this could be factored out like transformNodeArr above
   const xChildMap = <C extends ASTNode>(map: ReadonlyMap<string, C>, pred: (n: ASTNode) => n is C): ReadonlyMap<string, C> => {
@@ -100,6 +100,19 @@ function transformChildren<N extends ASTNode, X>(node: N, transform: (node: ASTN
 
     case 'Emit':
       throw new Error('unimplemented');
+
+    case 'Program': {
+      const newDecls = xChildArr(node.decls, isDeclNode);
+
+      if (newDecls === node.decls) {
+        return node;
+      } else {
+        return {
+          ...node,
+          decls: newDecls,
+        };
+      }
+    }
   }
 }
 
@@ -200,7 +213,7 @@ function makeFnApp(nid: NodeId, fnNid: NodeId, fnIface: FnExtIface): ASTNode {
   };
 }
 
-const Block: React.FC<{children: React.ReactNode, node: ASTNode, ctx: NodeViewCtx}> = ({children, node, ctx}) => {
+const Block: React.FC<{children?: React.ReactNode, node: ASTNode, ctx: NodeViewCtx, style: string, isListItem: boolean, allowed: string}> = ({children, node, ctx, style, isListItem, allowed}) => {
   const blockElem = useRef<HTMLDivElement>(null);
 
   const handlePointerDown = (e: React.PointerEvent) => {
@@ -211,6 +224,10 @@ const Block: React.FC<{children: React.ReactNode, node: ASTNode, ctx: NodeViewCt
     e.preventDefault();
 
     if (ctx.allowDrag === 'no') {
+      return;
+    }
+
+    if (node.type === 'Hole') {
       return;
     }
 
@@ -234,8 +251,7 @@ const Block: React.FC<{children: React.ReactNode, node: ASTNode, ctx: NodeViewCt
       y: e.clientY - rect.top,
     };
 
-    // TODO: if we're dragging a tree of more than one node, we need to "deep"-regenerate new node ids for all of them
-    const dragNode: ASTNode = (ctx.kind === 'palette') ? {...node, nid: genUidRandom()} : node;
+    const dragNode: ASTNode = (ctx.kind === 'palette') ? treeRandomizeNodeIds(node, () => true) : node;
 
     if (ctx.kind === 'code') {
       ctx.dispatch({
@@ -257,11 +273,24 @@ const Block: React.FC<{children: React.ReactNode, node: ASTNode, ctx: NodeViewCt
     );
   };
 
+  let dropHL = false;
+  for (const dropLoc of ctx.dropLocs) {
+    if (dropLoc.type === 'ontoNode') {
+      if (dropLoc.nodeId === node.nid) {
+        dropHL = true;
+        break;
+      }
+    }
+  }
+
   return (
     <div
-      className="CodeEditor-block"
+      className={'CodeEditor-block' + (' CodeEditor-block-style-' + style) + (dropHL ? ' CodeEditor-block-highlight' : '')}
       ref={blockElem}
       onPointerDown={handlePointerDown}
+      data-node-id={node.nid}
+      data-list-item={isListItem || undefined}
+      data-allowed={allowed}
     >
       {children}
     </div>
@@ -276,23 +305,29 @@ const BlockLineText: React.FC<{text: string}> = ({text}) => {
   return <div className="CodeEditor-block-line-text">{text}</div>
 };
 
-const BlockVListSep: React.FC<{idx: number, parentNodeId: NodeId | undefined, hl: boolean}> = ({idx, parentNodeId, hl}) => {
-  return <div className={'CodeEditor-block-vlist-sep' + (hl ? ' CodeEditor-block-vlist-sep-highlight': '')} data-parent-node-id={parentNodeId} data-index={idx} />;
+const BlockVListSep: React.FC<{idx: number, parentNodeId: NodeId | undefined, hl: boolean, last: boolean, allowed: string}> = ({idx, parentNodeId, hl, last, allowed}) => {
+  return <div
+    className={'CodeEditor-block-vlist-sep' + (hl ? ' CodeEditor-block-vlist-sep-highlight': '')}
+    data-parent-node-id={parentNodeId}
+    data-index={idx}
+    data-last={last || undefined}
+    data-allowed={allowed}
+  />;
 }
 
-const BlockVList: React.FC<{childViews: ReadonlyArray<React.ReactNode>, dropIdxs: ReadonlySet<number>, parentNodeId: NodeId | undefined}> = ({childViews, dropIdxs, parentNodeId}) => {
+const BlockVList: React.FC<{childViews: ReadonlyMap<string, React.ReactNode>, dropIdxs: ReadonlySet<number>, parentNodeId: NodeId | undefined, allowed: string}> = ({childViews, dropIdxs, parentNodeId, allowed}) => {
   return (
     <div className="CodeEditor-block-vlist">
-      {(childViews.length > 0) ? childViews.map((child, idx) => (
-        <React.Fragment>
-          <BlockVListSep idx={idx} parentNodeId={parentNodeId} hl={dropIdxs.has(idx)} />
+      {(childViews.size > 0) ? Array.from(childViews).map(([key, child], idx) => (
+        <React.Fragment key={key}>
+          <BlockVListSep idx={idx} parentNodeId={parentNodeId} hl={dropIdxs.has(idx)} last={false} allowed={allowed} />
           {child}
 
-          {(idx === (childViews.length-1)) &&
-            <BlockVListSep idx={idx+1} parentNodeId={parentNodeId} hl={dropIdxs.has(idx+1)} />
+          {(idx === (childViews.size-1)) &&
+            <BlockVListSep idx={idx+1} parentNodeId={parentNodeId} hl={dropIdxs.has(idx+1)} last={true} allowed={allowed} />
           }
         </React.Fragment>
-      )) : <BlockVListSep idx={0} parentNodeId={parentNodeId} hl={dropIdxs.has(0)} />}
+      )) : <BlockVListSep idx={0} parentNodeId={parentNodeId} hl={dropIdxs.has(0)} last={true} allowed={allowed} />}
     </div>
   );
 };
@@ -308,11 +343,19 @@ interface NodeViewCtx {
   readonly dropLocs: ReadonlyArray<DropLoc>;
 }
 
-const HoleView: React.FC<{node: HoleNode, ctx: NodeViewCtx}> = () => {
-  return <div className="CodeEditor-hole"></div>
+const HoleView: React.FC<{node: HoleNode, ctx: NodeViewCtx, isListItem: boolean, allowed: string}> = ({node, ctx, isListItem, allowed}) => {
+  return (
+    <Block
+      node={node}
+      ctx={ctx}
+      style="hole"
+      isListItem={isListItem}
+      allowed={allowed}
+    >&nbsp;</Block>
+  );
 };
 
-const LiteralView: React.FC<{node: LiteralNode, ctx: NodeViewCtx}> = ({node, ctx}) => {
+const LiteralView: React.FC<{node: LiteralNode, ctx: NodeViewCtx, isListItem: boolean, allowed: string}> = ({node, ctx, isListItem, allowed}) => {
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     let newValue: string | number | boolean;
     switch (node.subtype) {
@@ -338,7 +381,7 @@ const LiteralView: React.FC<{node: LiteralNode, ctx: NodeViewCtx}> = ({node, ctx
     });
   };
   return (
-    <Block node={node} ctx={ctx}>
+    <Block node={node} ctx={ctx} style="expr" isListItem={isListItem} allowed={allowed}>
       <BlockLine>
         {(() => {
           switch (node.subtype) {
@@ -357,7 +400,7 @@ const LiteralView: React.FC<{node: LiteralNode, ctx: NodeViewCtx}> = ({node, ctx
   );
 };
 
-const FnAppView: React.FC<{node: FnAppNode, ctx: NodeViewCtx}> = ({node, ctx}) => {
+const FnAppView: React.FC<{node: FnAppNode, ctx: NodeViewCtx, isListItem: boolean, allowed: string}> = ({node, ctx, isListItem, allowed}) => {
   const fnAn = ctx.varAn.get(node.fn);
   invariant(fnAn !== undefined);
   invariant(fnAn.type.type === 'Fn');
@@ -366,7 +409,7 @@ const FnAppView: React.FC<{node: FnAppNode, ctx: NodeViewCtx}> = ({node, ctx}) =
   const childCtx = {...ctx, allowDrag: (ctx.allowDrag === 'no-children') ? 'no' : ctx.allowDrag};
 
   return (
-    <Block node={node} ctx={ctx}>
+    <Block node={node} ctx={ctx} style="expr" isListItem={isListItem} allowed={allowed}>
       {parsed.lines.map((line, idx) => (
         <BlockLine key={idx}>
           {line.map((item, idx) => {
@@ -379,7 +422,7 @@ const FnAppView: React.FC<{node: FnAppNode, ctx: NodeViewCtx}> = ({node, ctx}) =
                 // TODO: make use of item.label if arg node is a hole?
                 const arg = node.args.get(item.pid);
                 invariant(arg);
-                return <NodeView key={item.pid} node={arg} ctx={childCtx} />
+                return <NodeView key={item.pid} node={arg} ctx={childCtx} isListItem={false} allowed="value" />
               }
 
               default:
@@ -392,11 +435,11 @@ const FnAppView: React.FC<{node: FnAppNode, ctx: NodeViewCtx}> = ({node, ctx}) =
   );
 };
 
-const VarRefView: React.FC<{node: VarRefNode, ctx: NodeViewCtx}> = ({node, ctx}) => {
+const VarRefView: React.FC<{node: VarRefNode, ctx: NodeViewCtx, isListItem: boolean, allowed: string}> = ({node, ctx, isListItem, allowed}) => {
   const refNode = ctx.varName.get(node.refId);
   invariant(refNode !== undefined);
   return (
-    <Block node={node} ctx={ctx}>
+    <Block node={node} ctx={ctx} style="expr" isListItem={isListItem} allowed={allowed}>
       <BlockLine>
         <BlockLineText text={refNode.name} />
       </BlockLine>
@@ -404,55 +447,57 @@ const VarRefView: React.FC<{node: VarRefNode, ctx: NodeViewCtx}> = ({node, ctx})
   );
 };
 
-const EqView: React.FC<{node: EqNode, ctx: NodeViewCtx}> = ({node, ctx}) => {
+const EqView: React.FC<{node: EqNode, ctx: NodeViewCtx, isListItem: boolean, allowed: string}> = ({node, ctx, isListItem, allowed}) => {
   const childCtx = {...ctx, allowDrag: (ctx.allowDrag === 'no-children') ? 'no' : ctx.allowDrag};
 
   return (
-    <Block node={node} ctx={ctx}>
+    <Block node={node} ctx={ctx} style="decl" isListItem={isListItem} allowed={allowed}>
       <BlockLine>
-        <NodeView node={node.lhs} ctx={childCtx} />
+        <NodeView node={node.lhs} ctx={childCtx} isListItem={false} allowed="bind" />
         <BlockLineText text="=" />
-        <NodeView node={node.rhs} ctx={childCtx} />
+        <NodeView node={node.rhs} ctx={childCtx} isListItem={false} allowed="value" />
       </BlockLine>
     </Block>
   );
 };
 
-const NodeView: React.FC<{node: ASTNode, ctx: NodeViewCtx}> = ({node, ctx}) => {
+const ProgramView: React.FC<{node: ProgramNode, ctx: NodeViewCtx}> = ({node, ctx}) => {
+  return <DeclListView decls={node.decls} parentNode={node} ctx={ctx} />;
+}
+
+const NodeView: React.FC<{node: ASTNode, ctx: NodeViewCtx, isListItem: boolean, allowed: string}> = ({node, ctx, isListItem, allowed}) => {
   switch (node.type) {
     case 'Hole':
-      return <HoleView key={node.nid} node={node} ctx={ctx} />
+      return <HoleView key={node.nid} node={node} ctx={ctx} isListItem={isListItem} allowed={allowed} />
 
     case 'Literal':
-      return <LiteralView key={node.nid} node={node} ctx={ctx} />
+      return <LiteralView key={node.nid} node={node} ctx={ctx} isListItem={isListItem} allowed={allowed} />
 
     case 'FnApp':
-      return <FnAppView key={node.nid} node={node} ctx={ctx} />
+      return <FnAppView key={node.nid} node={node} ctx={ctx} isListItem={isListItem} allowed={allowed} />
 
     case 'VarRef':
-      return <VarRefView key={node.nid} node={node} ctx={ctx} />
+      return <VarRefView key={node.nid} node={node} ctx={ctx} isListItem={isListItem} allowed={allowed} />
 
     case 'Eq':
-      return <EqView key={node.nid} node={node} ctx={ctx} />
+      return <EqView key={node.nid} node={node} ctx={ctx} isListItem={isListItem} allowed={allowed} />
 
     default:
       throw new Error('unimplemented');
   }
 };
 
-const DeclListView: React.FC<{decls: ReadonlyArray<DeclNode>, parentNode: ASTNode | null, ctx: NodeViewCtx}> = ({decls, parentNode, ctx}) => {
-  const childViews = decls.map(decl => <NodeView key={decl.nid} node={decl} ctx={ctx} />);
+const DeclListView: React.FC<{decls: ReadonlyArray<DeclNode>, parentNode: ASTNode, ctx: NodeViewCtx}> = ({decls, parentNode, ctx}) => {
+  const childViews = new Map(decls.map(decl => [decl.nid, <NodeView key={decl.nid} node={decl} ctx={ctx} isListItem={true} allowed="decl" />]));
 
   const dropIdxs: Set<number> = new Set();
   for (const dropLoc of ctx.dropLocs) {
-    if ((dropLoc.type === 'intoTopList') && (parentNode === null)) {
-      dropIdxs.add(dropLoc.idx);
-    } else if ((dropLoc.type === 'intoList') && (dropLoc.nodeId === parentNode?.nid)) {
+    if ((dropLoc.type === 'intoList') && (dropLoc.nodeId === parentNode.nid)) {
       dropIdxs.add(dropLoc.idx);
     }
   }
 
-  return <BlockVList childViews={childViews} dropIdxs={dropIdxs} parentNodeId={parentNode?.nid} />;
+  return <BlockVList childViews={childViews} dropIdxs={dropIdxs} parentNodeId={parentNode.nid} allowed="decl" />;
 }
 
 type DropLoc =
@@ -461,12 +506,8 @@ type DropLoc =
     readonly nodeId: NodeId;
   } | {
     readonly type: 'intoList';
-    readonly nodeId: NodeId; // node which has a child list
+    readonly nodeId: NodeId; // node which has a child list. we assume nodes can only have one child list
     readonly idx: number; // may equal list length to go after last
-  } | {
-    // as 'intoList' but for the top-level decl list
-    readonly type: 'intoTopList';
-    readonly idx: number;
   };
 
 type CodeEditorAction =
@@ -492,100 +533,147 @@ type CodeEditorAction =
 type CodeEditorDispatch = React.Dispatch<CodeEditorAction>;
 
 interface CodeEditorState {
-  readonly decls: ReadonlyArray<DeclNode>;
+  readonly program: ProgramNode;
   readonly dragDropLocs: ReadonlyMap<ASTNode, DropLoc>;
 }
 
 const INIT_STATE: CodeEditorState = {
-  decls: [],
+  program: {
+    type: 'Program',
+    nid: 'prog',
+    decls: [],
+  },
   dragDropLocs: new Map(),
 };
 
+function progReplaceNodeHelper(program: ProgramNode, oldPred: (node: ASTNode) => boolean, newNode: ASTNode): ProgramNode {
+  let replaceCount = 0;
+
+  const transform = (node: ASTNode): ASTNode => {
+    if (oldPred(node)) {
+      replaceCount++;
+      return newNode;
+    } else {
+      return transformChildren(node, transform, undefined);
+    }
+  }
+
+  const newProgram = transform(program);
+  invariant(isProgramNode(newProgram));
+
+  invariant(replaceCount === 1, 'expected exactly one node to be replaced');
+
+  return newProgram;
+}
+
+function progReplaceNode(program: ProgramNode, oldNode: ASTNode, newNode: ASTNode): ProgramNode {
+  return progReplaceNodeHelper(program, node => (node === oldNode), newNode);
+}
+
+function progReplaceNodeId(program: ProgramNode, oldNodeId: NodeId, newNode: ASTNode): ProgramNode {
+  return progReplaceNodeHelper(program, node => (node.nid === oldNodeId), newNode);
+}
+
+function progInsertListNode(program: ProgramNode, parentNodeId: NodeId, idx: number, newNode: ASTNode): ProgramNode {
+  let insertCount = 0;
+
+  const transform = (node: ASTNode): ASTNode => {
+    if (node.nid === parentNodeId) {
+      insertCount++;
+
+      switch (node.type) {
+        case 'Program': {
+          invariant(isDeclNode(newNode));
+          return {
+            ...node,
+            decls: insertIntoArray(node.decls, idx, newNode),
+          };
+        }
+
+        default:
+          throw new Error('unimplemented');
+      }
+    } else {
+      return transformChildren(node, transform, undefined);
+    }
+  }
+
+  const newProgram = transform(program);
+  invariant(isProgramNode(newProgram));
+
+  invariant(insertCount === 1, 'expected exactly one insertion site');
+
+  return newProgram;
+}
+
+function progRemoveListNode(program: ProgramNode, nodeId: NodeId): ProgramNode {
+  let removeCount = 0;
+
+  const transform = (node: ASTNode): ASTNode => {
+    let newNode = node;
+    switch (node.type) {
+      case 'Program': {
+        const matches = node.decls.filter(decl => (decl.nid === nodeId));
+        if (matches.length > 0) {
+          removeCount += matches.length;
+          newNode = {
+            ...node,
+            decls: node.decls.filter(decl => (decl.nid !== nodeId)),
+          };
+        }
+      }
+    }
+
+    return transformChildren(newNode, transform, undefined);
+  }
+
+  const newProgram = transform(program);
+  invariant(isProgramNode(newProgram));
+
+  invariant(removeCount === 1, 'expected exactly one node removed');
+
+  return newProgram;
+}
+
+function treeRandomizeNodeIds(root: ASTNode, nodePred: (node: ASTNode) => boolean): ASTNode {
+  const transform = (node: ASTNode): ASTNode => {
+    const newNode = nodePred(node) ? {
+      ...node,
+      nid: genUidRandom(),
+    } : node;
+
+    return transformChildren(newNode, transform, undefined);
+  }
+
+  const newRoot = transform(root);
+
+  return newRoot;
+}
+
 function reducer(state: CodeEditorState, action: CodeEditorAction): CodeEditorState {
   switch (action.type) {
-    /*
-    case 'addDraggedDecl': {
-      const idx = state.decls.findIndex(decl => (decl.type === 'TmpDecl') && (decl.decl === action.decl));
-      if (idx < 0) {
-        // don't have yet, so create
-        const tmpDecl: TmpDeclNode = {type: 'TmpDecl', nid: 'tmp-'+action.decl.nid, decl: action.decl};
-        const newDecls = [...state.decls, tmpDecl];
-        return {
-          ...state,
-          decls: newDecls,
-        };
-      } else {
-        return state;
-      }
-    }
-
-    case 'removeDraggedDecl': {
-      const idx = state.decls.findIndex(decl => (decl.type === 'TmpDecl') && (decl.decl === action.decl));
-      if (idx >= 0) {
-        const newDecls = state.decls.filter((_, i) => i !== idx);
-        return {
-          ...state,
-          decls: newDecls,
-        };
-      } else {
-        return state;
-      }
-    }
-
-    case 'acceptDraggedDecl': {
-      const idx = state.decls.findIndex(decl => (decl.type === 'TmpDecl') && (decl.decl === action.decl));
-      if (idx >= 0) {
-        const newDecls = state.decls.map(decl => {
-          if ((decl.type === 'TmpDecl') && (decl.decl === action.decl)) {
-            return decl.decl;
-          } else {
-            return decl;
-          }
-        });
-        return {
-          ...state,
-          decls: newDecls,
-        };
-      } else {
-        return state;
-      }
-    }
-    */
-
     case 'replaceNode': {
       const {oldNode, newNode} = action;
 
-      let replaceCount = 0;
-
-      const transform = (node: ASTNode): ASTNode => {
-        if (node === oldNode) {
-          replaceCount++;
-          return newNode;
-        } else {
-          return transformChildren(node, transform, undefined);
-        }
-      }
-
-      const newRootDecls = transformNodeArr(state.decls, isDeclNode, transform);
-
-      invariant(replaceCount === 1, 'expected exactly one node to be replaced');
-
       return {
         ...state,
-        decls: newRootDecls,
+        program: progReplaceNode(state.program, oldNode, newNode),
       };
     }
 
     case 'removeNodeForDrag': {
-      const idx = state.decls.findIndex(decl => (action.node === decl));
-      if (idx >= 0) {
-        const newDecls = state.decls.filter((_, i) => i !== idx);
-        const newDragDropLocs = new Map(state.dragDropLocs);
-        newDragDropLocs.set(action.node, {type: 'intoTopList', idx: idx});
+      if (isDeclNode(action.node)) {
         return {
           ...state,
-          decls: newDecls,
-          dragDropLocs: newDragDropLocs,
+          program: progRemoveListNode(state.program, action.node.nid),
+        };
+      } else if (isValueExprNode(action.node) || isBindExprNode(action.node)) {
+        return {
+          ...state,
+          program: progReplaceNodeId(state.program, action.node.nid, {
+            type: 'Hole',
+            nid: genUidRandom(),
+          }),
         };
       } else {
         throw new Error('unimplemented');
@@ -624,18 +712,17 @@ function reducer(state: CodeEditorState, action: CodeEditorAction): CodeEditorSt
 
         switch (dropLoc.type) {
           case 'ontoNode': {
-            throw new Error('unimplemented');
+            return {
+              ...state,
+              program: progReplaceNodeId(state.program, dropLoc.nodeId, action.node),
+              dragDropLocs: newDragDropLocs,
+            };
           }
 
           case 'intoList': {
-            throw new Error('unimplemented');
-          }
-
-          case 'intoTopList': {
-            invariant(isDeclNode(action.node));
             return {
               ...state,
-              decls: insertIntoArray(state.decls, dropLoc.idx, action.node),
+              program: progInsertListNode(state.program, dropLoc.nodeId, dropLoc.idx, action.node),
               dragDropLocs: newDragDropLocs,
             };
           }
@@ -723,6 +810,25 @@ const CodeEditor: React.FC<{editorCtx: EditorContext<Code, undefined>}> = ({edit
   ];
 
   const handlePointerMove = (e: React.PointerEvent) => {
+    const matchesAllowed = (node: ASTNode, allowed: string) => {
+      switch (allowed) {
+        case 'decl':
+          return isDeclNode(node);
+
+        case 'value':
+          return isValueExprNode(node);
+
+        case 'bind':
+          return isBindExprNode(node);
+
+        case 'none':
+          return false;
+
+        default:
+          throw new Error('unimplemented');
+      }
+    };
+
     const ne = e.nativeEvent as PointerEvent;
     const dv = (ne as any).draggingValue as (ValueDragInfo | undefined);
     if (!dv) {
@@ -743,25 +849,77 @@ const CodeEditor: React.FC<{editorCtx: EditorContext<Code, undefined>}> = ({edit
 
     if (insideCodeArea) {
       // inside code area
+      const MAX_DROP_DIST = 100;
+      let nearestDropLoc: DropLoc | undefined = undefined;
+      let nearestDropLocDist = Infinity;
+
+      const dragPos = {x: ne.clientX, y: ne.clientY};
+
       const sepElems = codeArea.querySelectorAll('.CodeEditor-block-vlist-sep');
-      let nearestSepElem: Element | null = null;
-      let nearestSepDist = Infinity;
       for (let i = 0; i < sepElems.length; i++) {
         const sepElem = sepElems[i];
+
+        const allowed = sepElem.getAttribute('data-allowed');
+        invariant(allowed !== null);
+        if (!matchesAllowed(draggedNode, allowed)) {
+          continue;
+        }
+
         const sepRect = sepElem.getBoundingClientRect();
-        const dist = Math.abs(0.5*(sepRect.top+sepRect.bottom) - ne.clientY);
-        if (dist < nearestSepDist) {
-          nearestSepElem = sepElem;
-          nearestSepDist = dist;
+        const dist = Math.abs(0.5*(sepRect.top+sepRect.bottom) - dragPos.y);
+        if (dist < nearestDropLocDist) {
+          if ((dist <= MAX_DROP_DIST) || sepElem.getAttribute('data-last')) {
+            const parentNodeId = sepElem.getAttribute('data-parent-node-id');
+            invariant(parentNodeId !== null);
+            const idxStr = sepElem.getAttribute('data-index');
+            invariant(idxStr !== null);
+            const idx = +idxStr;
+
+            nearestDropLoc = {type: 'intoList', nodeId: parentNodeId, idx};
+            nearestDropLocDist = dist;
+          }
         }
       }
-      if (nearestSepElem) {
-        invariant(nearestSepElem.getAttribute('data-parent-node-id') === null);
-        const idx = +nearestSepElem.getAttribute('data-index')!;
+
+      const nodeElems = codeArea.querySelectorAll('.CodeEditor-block');
+      for (let i = 0; i < nodeElems.length; i++) {
+        const nodeElem = nodeElems[i];
+
+        if (nodeElem.getAttribute('data-list-item') !== null) {
+          // prevent dropping onto list items
+          continue;
+        }
+
+        const allowed = nodeElem.getAttribute('data-allowed');
+        invariant(allowed !== null);
+        if (!matchesAllowed(draggedNode, allowed)) {
+          continue;
+        }
+
+        const nodeRect = nodeElem.getBoundingClientRect();
+        const nodeX = 0.5*(nodeRect.left+nodeRect.right);
+        const nodeY = 0.5*(nodeRect.top+nodeRect.bottom);
+        const dist = Math.sqrt((nodeX-dragPos.x)**2 + (nodeY-dragPos.y)**2);
+        if (dist < nearestDropLocDist) {
+          if (dist <= MAX_DROP_DIST) {
+            const nodeId = nodeElem.getAttribute('data-node-id');
+            invariant(nodeId !== null);
+            nearestDropLoc = {type: 'ontoNode', nodeId};
+            nearestDropLocDist = dist;
+          }
+        }
+      }
+
+      if (nearestDropLoc) {
         dispatch({
           type: 'setNodeDragDropLoc',
           node: draggedNode,
-          dropLoc: {type: 'intoTopList', idx},
+          dropLoc: nearestDropLoc,
+        });
+      } else {
+        dispatch({
+          type: 'removeNodeDragDropLoc',
+          node: draggedNode,
         });
       }
     } else {
@@ -811,13 +969,14 @@ const CodeEditor: React.FC<{editorCtx: EditorContext<Code, undefined>}> = ({edit
               editorCtx,
               dropLocs: [],
             }}
+            isListItem={false}
+            allowed="none"
           />
         ))}
       </div>
       <div className="CodeEditor-code">
-        <DeclListView
-          decls={state.decls}
-          parentNode={null}
+        <ProgramView
+          node={state.program}
           ctx={{
             kind: 'code',
             varAn,

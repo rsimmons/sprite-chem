@@ -55,6 +55,15 @@ export interface EmitNode {
   readonly expr: ValueExprNode; // the value we are emitting
 }
 
+export interface ProgramNode {
+  readonly type: 'Program';
+  readonly nid: NodeId;
+  readonly decls: ReadonlyArray<DeclNode>;
+}
+export function isProgramNode(node: ASTNode): node is ProgramNode {
+  return (node.type === 'Program');
+}
+
 export type DeclNode =
   | WhenNode
   | EqNode
@@ -87,7 +96,8 @@ export type ASTNode =
   | DeclNode
   | ValueExprNode
   | BindExprNode
-  | StmtNode;
+  | StmtNode
+  | ProgramNode;
 
 export interface Code {
   readonly decls: ReadonlyArray<DeclNode>;

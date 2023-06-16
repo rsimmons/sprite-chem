@@ -26,6 +26,7 @@ data URIs. The easiest fix seemed to be making this not flex. */
 .PoolTabPanel-preview-container {
   width: 6em;
   height: 6em;
+  cursor: grab;
 }
 
 /* need to do this instead for Safari: https://medium.com/@jeandesravines/use-border-radius-and-outline-simultaneously-on-safari-14ce92889e1f */
