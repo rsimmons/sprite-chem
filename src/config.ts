@@ -8,13 +8,14 @@ import spriteWorldSetupEditor from './extensions/editors/spriteWorldSetupEditor'
 import spriteWorldSetupEmpty from './extensions/creators/spriteWorldSetupEmpty';
 import spriteWorldRunner from './extensions/runners/spriteWorldRunner';
 
-import codeEditor from './extensions/editors/codeEditor';
+import spriteEditor from './extensions/editors/spriteEditor';
 
 import { EVWrapper, createDevtimeEVWrapper } from './extlib/ev';
 
 import witch from './sprites/witch.png';
 import monster from './sprites/monster.png';
 import cyclops from './sprites/cyclops.png';
+import { ProgramNode } from './extensions/types/code';
 
 export const TEMPLATE: Template = {
   pools: [
@@ -47,7 +48,7 @@ export const TEMPLATE: Template = {
   },
   editors: {
     'sprite': {
-      ext: codeEditor,
+      ext: spriteEditor,
     },
     'spriteWorldSetup': {
       ext: spriteWorldSetupEditor,
@@ -74,8 +75,14 @@ export const TEMPLATE: Template = {
     for (const url of [witch, monster, cyclops]) {
       const resp = await fetch(url);
       const blob = await resp.blob();
+      const initProg: ProgramNode = {
+        type: 'Program',
+        nid: 'program',
+        decls: [],
+      };
       const sprite = {
         imageBlob: blob,
+        code: initProg,
       };
       const spriteEV = createDevtimeEVWrapper<Sprite>('sprite', sprite);
       spriteEVs.push(spriteEV);

@@ -1,5 +1,6 @@
 import { EVWrapper } from "../../extlib/ev";
 import { Runner } from "../../extlib/runner";
+import { DynamicContext, interpretProg } from "../../extshared/codeExec";
 import { createRenderCanvas, SpriteInstances } from "../../extshared/spriteWorld";
 import { Sprite } from "../types/sprite";
 import { SpriteWorldSetup } from "../types/spriteWorldSetup";
@@ -37,11 +38,22 @@ interface SpriteWorldState {
 }
 
 function advanceWorldState(state: SpriteWorldState): void {
-  for (const [, sprite] of state.sprites) {
-    for (const inst of sprite.instances) {
+  for (const [spriteEV, spriteInfo] of state.sprites) {
+    // const prog = spriteEV.value.prog;
+    for (const inst of spriteInfo.instances) {
+      const dynCtx: DynamicContext = {
+        nidVal: new Map([
+          ['origin', {x: 0, y: 0}],
+        ]),
+      };
+      // interpretProg()
+    }
+    /*
+    for (const inst of spriteInfo.instances) {
       inst.pos.x += 10*(Math.random() - 0.5);
       inst.pos.y += 10*(Math.random() - 0.5);
     }
+    */
   }
 }
 

@@ -7,7 +7,7 @@ import { EVWrapper } from '../../extlib/ev';
 
 const spriteWorldSetupEditor: Editor<SpriteWorldSetup, undefined> = {
   create: (context) => {
-    const ev = context.ev;
+    let editedValue = context.initialValue;
 
     interface CachedSpriteInfo {
       readonly sprite: Sprite;
@@ -33,7 +33,7 @@ const spriteWorldSetupEditor: Editor<SpriteWorldSetup, undefined> = {
     };
 
     // handle dependencies of initial value
-    ev.value.instances.forEach((insts, spriteEV) => {
+    editedValue.instances.forEach((insts, spriteEV) => {
       const info: CachedSpriteInfo = {
         sprite: spriteEV.value,
         bitmapInfo: undefined,
@@ -45,7 +45,7 @@ const spriteWorldSetupEditor: Editor<SpriteWorldSetup, undefined> = {
     const {cleanup, canvas, pixelScale} = createRenderCanvas(context.container, () => {
       // this is getState callback
       const renderInsts: Map<EVWrapper<Sprite>, SpriteInstances> = new Map();
-      ev.value.instances.forEach((insts, spriteEV) => {
+      editedValue.instances.forEach((insts, spriteEV) => {
         const info = cachedSpriteInfo.get(spriteEV);
         invariant(info);
         if (info.bitmapInfo) {
@@ -71,7 +71,7 @@ const spriteWorldSetupEditor: Editor<SpriteWorldSetup, undefined> = {
       const dragData = getEventDragData(e);
       if (dragData) {
         if (dragData.ev.typeId === 'sprite') {
-          const newInstances = new Map(ev.value.instances);
+          const newInstances = new Map(editedValue.instances);
           if (!newInstances.has(dragData.ev)) {
             newInstances.set(dragData.ev, []);
             const info: CachedSpriteInfo = {
@@ -93,12 +93,12 @@ const spriteWorldSetupEditor: Editor<SpriteWorldSetup, undefined> = {
             size: pixelScale*dragData.size,
           }]));
 
-          ev.value = {
-            ...ev.value,
+          editedValue = {
+            ...editedValue,
             instances: newInstances,
           };
 
-          // TODO: notify listeners of value change
+          context.valueChanged(editedValue);
         }
       }
     };

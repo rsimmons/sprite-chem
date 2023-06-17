@@ -29,9 +29,15 @@ export interface EditorContext<T, C> {
   readonly container: HTMLElement;
 
   /**
-   * The EV this editor is editing
+   * The value this editor is editing (NOT wrapped as an EV)
    */
-  readonly ev: EVWrapper<T>;
+  readonly initialValue: T;
+
+  /**
+   * The editor should call this to report that the value that it's editing
+   * has an updated value.
+   */
+  readonly valueChanged: (newValue: T) => void;
 
   /**
    * Begin a drag of a value/object that is NOT an EV.

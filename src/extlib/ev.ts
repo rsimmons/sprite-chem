@@ -17,6 +17,8 @@ export interface EVWrapper<T> {
   value: T;
 
   // available only at devtime:
+  readonly setValue: (newValue: T) => void;
+
   readonly getReferencedEVs: () => ReadonlyArray<EVWrapper<any>>;
 
   // subscribe to get notified when the underlying value changes
@@ -35,6 +37,7 @@ export function createRuntimeEVWrapper<T>(typeId: EVTypeId, value: T): EVWrapper
   return {
     typeId,
     value,
+    setValue: (newValue: T) => { throw new Error('unimplemented'); },
     getReferencedEVs: () => { throw new Error('unimplemented'); },
     onValueChange: () => { throw new Error('unimplemented'); },
     offValueChange: () => { throw new Error('unimplemented'); },
@@ -44,9 +47,13 @@ export function createRuntimeEVWrapper<T>(typeId: EVTypeId, value: T): EVWrapper
 }
 
 export function createDevtimeEVWrapper<T>(typeId: EVTypeId, value: T): EVWrapper<T> {
-  return {
+  const ev = {
     typeId,
     value,
+    setValue: (newValue: T) => {
+      ev.value = newValue;
+      // TODO: notify listeners
+    },
     // TODO: implement these below
     getReferencedEVs: () => { throw new Error('unimplemented'); },
     onValueChange: () => { throw new Error('unimplemented'); },
@@ -54,4 +61,5 @@ export function createDevtimeEVWrapper<T>(typeId: EVTypeId, value: T): EVWrapper
     onDeleted: () => { throw new Error('unimplemented'); },
     offDeleted: () => { throw new Error('unimplemented'); },
   };
+  return ev;
 }

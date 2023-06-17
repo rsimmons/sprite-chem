@@ -99,6 +99,4 @@ export type ASTNode =
   | StmtNode
   | ProgramNode;
 
-export interface Code {
-  readonly decls: ReadonlyArray<DeclNode>;
-}
+export type Code = ProgramNode;

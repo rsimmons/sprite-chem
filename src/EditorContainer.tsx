@@ -32,7 +32,10 @@ const EditorContainer: React.FC<{
     editorReturnRef.current = editor.create({
       config,
       container: containerRef.current,
-      ev,
+      initialValue: ev.value,
+      valueChanged: (newValue) => {
+        ev.setValue(newValue);
+      },
       beginDrag: (
         typeId: string,
         pointerId: PointerID,

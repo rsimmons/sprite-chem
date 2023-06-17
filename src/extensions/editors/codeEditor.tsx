@@ -1,4 +1,4 @@
-import React, { useReducer, useRef } from 'react';
+import React, { useCallback, useReducer, useRef } from 'react';
 import ReactDOM from 'react-dom/client';
 import { Editor, EditorContext, ValueDragInfo } from '../../extlib/editor';
 import { genUidRandom, insertIntoArray, invariant } from '../../util';
@@ -537,15 +537,6 @@ interface CodeEditorState {
   readonly dragDropLocs: ReadonlyMap<ASTNode, DropLoc>;
 }
 
-const INIT_STATE: CodeEditorState = {
-  program: {
-    type: 'Program',
-    nid: 'prog',
-    decls: [],
-  },
-  dragDropLocs: new Map(),
-};
-
 function progReplaceNodeHelper(program: ProgramNode, oldPred: (node: ASTNode) => boolean, newNode: ASTNode): ProgramNode {
   let replaceCount = 0;
 
@@ -734,8 +725,22 @@ function reducer(state: CodeEditorState, action: CodeEditorAction): CodeEditorSt
   }
 }
 
+function createNotifyingReducer(editorCtx: EditorContext<ProgramNode, undefined>): ((state: CodeEditorState, action: CodeEditorAction) => CodeEditorState) {
+  return (state: CodeEditorState, action: CodeEditorAction) => {
+    const newState = reducer(state, action);
+    editorCtx.valueChanged(newState.program);
+    return newState;
+  };
+}
+
 const CodeEditor: React.FC<{editorCtx: EditorContext<Code, undefined>}> = ({editorCtx}) => {
-  const [state, dispatch] = useReducer(reducer, INIT_STATE);
+  const notifyingReducer = useCallback(createNotifyingReducer(editorCtx), []);
+  const [state, dispatch] = useReducer(notifyingReducer, null, (): CodeEditorState => {
+    return {
+      program: editorCtx.initialValue,
+      dragDropLocs: new Map(),
+    };
+  });
 
   const editorRef = useRef<HTMLDivElement>(null);
 
@@ -775,6 +780,8 @@ const CodeEditor: React.FC<{editorCtx: EditorContext<Code, undefined>}> = ({edit
     varName.set(node.nid, node);
   });
 
+  varName.set('origin', {type: 'VarName', nid: 'origin', name: 'origin'});
+
   const paletteNodes: ReadonlyArray<ASTNode> = [
     ...fnIfaces.map(([nid, iface]) => makeFnApp('palette-'+nid, nid, iface)),
     {
@@ -806,6 +813,11 @@ const CodeEditor: React.FC<{editorCtx: EditorContext<Code, undefined>}> = ({edit
       nid: 'palette-return-move-speed-num',
       lhs: {type: 'VarRef', nid: 'eq_lhs', refId: 'moveSpeed'},
       rhs: {type: 'Literal', nid: 'eq_rhs', subtype: 'number', value: 10},
+    },
+    {
+      type: 'VarRef',
+      nid: 'palette-origin',
+      refId: 'origin',
     },
   ];
 
