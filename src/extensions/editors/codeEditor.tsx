@@ -1,4 +1,4 @@
-import React, { useCallback, useReducer, useRef } from 'react';
+import React, { useCallback, useEffect, useReducer, useRef } from 'react';
 import ReactDOM from 'react-dom/client';
 import { Editor, EditorContext, ValueDragInfo } from '../../extlib/editor';
 import { genUidRandom, insertIntoArray, invariant } from '../../util';
@@ -725,21 +725,20 @@ function reducer(state: CodeEditorState, action: CodeEditorAction): CodeEditorSt
   }
 }
 
-function createNotifyingReducer(editorCtx: EditorContext<ProgramNode, undefined>): ((state: CodeEditorState, action: CodeEditorAction) => CodeEditorState) {
-  return (state: CodeEditorState, action: CodeEditorAction) => {
-    const newState = reducer(state, action);
-    editorCtx.valueChanged(newState.program);
-    return newState;
-  };
-}
-
 const CodeEditor: React.FC<{editorCtx: EditorContext<Code, undefined>}> = ({editorCtx}) => {
-  const notifyingReducer = useCallback(createNotifyingReducer(editorCtx), []);
-  const [state, dispatch] = useReducer(notifyingReducer, null, (): CodeEditorState => {
+  const [state, dispatch] = useReducer(reducer, null, (): CodeEditorState => {
     return {
       program: editorCtx.initialValue,
       dragDropLocs: new Map(),
     };
+  });
+
+  const codeValRef = useRef<Code>(editorCtx.initialValue);
+  useEffect(() => {
+    if (state.program !== codeValRef.current) {
+      codeValRef.current = state.program;
+      editorCtx.valueChanged(state.program);
+    }
   });
 
   const editorRef = useRef<HTMLDivElement>(null);
