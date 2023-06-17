@@ -26,7 +26,7 @@ interface CreateRenderCanvasReturn {
   readonly pixelScale: number;
 }
 
-export function createRenderCanvas(container: HTMLElement, getState: () => RenderableState): CreateRenderCanvasReturn {
+export function createRenderCanvas(container: HTMLElement, getState: (t: number, dt: number) => RenderableState): CreateRenderCanvasReturn {
   const USE_HIDPI = true;
   const pixelScale = USE_HIDPI ? window.devicePixelRatio : 1;
 
@@ -51,13 +51,13 @@ export function createRenderCanvas(container: HTMLElement, getState: () => Rende
     };
   };
 
-  const render = (canvasWidth: number, canvasHeight: number, dt: number): void => {
+  const render = (canvasWidth: number, canvasHeight: number, t: number, dt: number): void => {
     const ctx = canvas.getContext('2d');
     invariant(ctx);
 
     ctx.clearRect(0, 0, canvasWidth, canvasHeight);
 
-    const state = getState();
+    const state = getState(t, dt);
     state.instances.forEach((insts, spriteEV) => {
       for (const inst of insts.instances) {
         const width = inst.size*insts.scaledWidth;
@@ -80,7 +80,7 @@ export function createRenderCanvas(container: HTMLElement, getState: () => Rende
     prevTime = time;
 
     const {canvasWidth, canvasHeight} = sizeCanvas();
-    render(canvasWidth, canvasHeight, 0.001*deltaTime);
+    render(canvasWidth, canvasHeight, 0.001*time, 0.001*deltaTime);
 
     rafId = requestAnimationFrame(frameCallback);
   };

@@ -2,6 +2,7 @@ import { EVWrapper } from "../../extlib/ev";
 import { Runner } from "../../extlib/runner";
 import { DynamicContext, interpretProg } from "../../extshared/codeExec";
 import { createRenderCanvas, SpriteInstances } from "../../extshared/spriteWorld";
+import { vec2add, vec2len, vec2scale, vec2sub } from "../../vec";
 import { Sprite } from "../types/sprite";
 import { SpriteWorldSetup } from "../types/spriteWorldSetup";
 
@@ -9,7 +10,7 @@ interface InstanceInfo {
   /**
    * Position of center
    */
-  readonly pos: {
+  pos: {
     x: number;
     y: number;
   };
@@ -37,23 +38,33 @@ interface SpriteWorldState {
   readonly sprites: Map<EVWrapper<Sprite>, SpriteInfo>;
 }
 
-function advanceWorldState(state: SpriteWorldState): void {
+function advanceWorldState(state: SpriteWorldState, t: number, dt: number): void {
   for (const [spriteEV, spriteInfo] of state.sprites) {
-    // const prog = spriteEV.value.prog;
+    const prog = spriteEV.value.code;
     for (const inst of spriteInfo.instances) {
       const dynCtx: DynamicContext = {
         nidVal: new Map([
           ['origin', {x: 0, y: 0}],
         ]),
       };
-      // interpretProg()
+
+      interpretProg(prog, dynCtx);
+
+      const moveTarget = dynCtx.nidVal.get('moveTarget');
+      const moveSpeed = dynCtx.nidVal.get('moveSpeed') || 10;
+
+      if (moveTarget) {
+        const diff = vec2sub(moveTarget, inst.pos);
+        const dist = vec2len(diff);
+        const maxDist = moveSpeed*dt;
+        if (dist <= maxDist) {
+          inst.pos = moveTarget;
+        } else {
+          const move = vec2scale(diff, maxDist/dist);
+          inst.pos = vec2add(inst.pos, move);
+        }
+      }
     }
-    /*
-    for (const inst of spriteInfo.instances) {
-      inst.pos.x += 10*(Math.random() - 0.5);
-      inst.pos.y += 10*(Math.random() - 0.5);
-    }
-    */
   }
 }
 
@@ -100,10 +111,10 @@ const spriteWorldRunner: Runner = {
       };
     })();
 
-    const {cleanup: cleanupCanvas, canvas, pixelScale} = createRenderCanvas(context.container, () => {
+    const {cleanup: cleanupCanvas, canvas, pixelScale} = createRenderCanvas(context.container, (t: number, dt: number) => {
       // this is getState callback
       if (worldState) {
-        advanceWorldState(worldState);
+        advanceWorldState(worldState, t, dt);
 
         const renderInsts: Map<EVWrapper<Sprite>, SpriteInstances> = new Map();
         worldState.sprites.forEach((spriteInfo, spriteEV) => {
