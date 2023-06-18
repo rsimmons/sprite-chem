@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useReducer, useRef } from 'react';
 import ReactDOM from 'react-dom/client';
-import { Editor, EditorContext, ValueDragInfo } from '../../extlib/editor';
+import { Editor, EditorContext, DragInfo, DragPayload } from '../../extlib/editor';
 import { genUidRandom, insertIntoArray, invariant } from '../../util';
 import { Vec2, vec2dist, vec2sub } from '../../vec';
 import { ASTNode, Code, DeclNode, EqNode, FnAppNode, HoleNode, isBindExprNode, isDeclNode, isProgramNode, isValueExprNode, LiteralNode, Name, NodeId, ProgramNode, ValueExprNode, VarNameNode, VarRefNode } from '../types/code';
@@ -193,7 +193,9 @@ interface FnExtIface {
 type Type =
   | {type: 'Fn', iface: FnExtIface}
   | {type: 'Num'}
-  | {type: 'Vec2'};
+  | {type: 'Vec2'}
+  | {type: 'EV', typeId: string}
+  ;
 
 interface Analysis {
   readonly type: Type;
@@ -358,41 +360,60 @@ const HoleView: React.FC<{node: HoleNode, ctx: NodeViewCtx, isListItem: boolean,
 const LiteralView: React.FC<{node: LiteralNode, ctx: NodeViewCtx, isListItem: boolean, allowed: string}> = ({node, ctx, isListItem, allowed}) => {
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     let newValue: string | number | boolean;
-    switch (node.subtype) {
-      case 'string':
+    switch (node.sub.type) {
+      case 'string': {
         newValue = e.target.value;
+        ctx.dispatch({
+          type: 'replaceNode',
+          oldNode: node,
+          newNode: {
+            ...node,
+            sub: {
+              ...node.sub,
+              value: newValue,
+            },
+          },
+        });
         break;
+      }
 
-      case 'number':
+      case 'number': {
         newValue = Number(e.target.value);
+        ctx.dispatch({
+          type: 'replaceNode',
+          oldNode: node,
+          newNode: {
+            ...node,
+            sub: {
+              ...node.sub,
+              value: newValue,
+            },
+          },
+        });
         break;
+      }
 
       default:
-        throw new Error('unimplemented: ' + node.subtype);
+        throw new Error('unimplemented: ' + node.sub.type);
     }
-
-    ctx.dispatch({
-      type: 'replaceNode',
-      oldNode: node,
-      newNode: {
-        ...node,
-        value: newValue,
-      },
-    });
   };
+
   return (
     <Block node={node} ctx={ctx} style="expr" isListItem={isListItem} allowed={allowed}>
       <BlockLine>
         {(() => {
-          switch (node.subtype) {
+          switch (node.sub.type) {
             case 'string':
-              return <input type="text" value={node.value} onChange={handleChange} />
+              return <input type="text" value={node.sub.value} onChange={handleChange} />
 
             case 'number':
-              return <input type="number" value={node.value} onChange={handleChange} />
+              return <input type="number" value={node.sub.value} onChange={handleChange} />
+
+            case 'ev':
+              return <BlockLineText text={'<ev>'} />
 
             default:
-              throw new Error('unimplemented: ' + node.subtype);
+              throw new Error('unimplemented: ' + node.sub.type);
           }
         })()}
       </BlockLine>
@@ -519,22 +540,26 @@ type CodeEditorAction =
     readonly type: 'removeNodeForDrag';
     readonly node: ASTNode;
   } | {
-    readonly type: 'setNodeDragDropLoc';
-    readonly node: ASTNode;
+    readonly type: 'setPotentialDrop';
+    readonly dragId: string;
+    readonly potentialNode: ASTNode;
     readonly dropLoc: DropLoc;
   } | {
-    readonly type: 'removeNodeDragDropLoc';
-    readonly node: ASTNode;
+    readonly type: 'removePotentialDrop';
+    readonly dragId: string;
   } | {
-    readonly type: 'endNodeDrag';
-    readonly node: ASTNode;
+    readonly type: 'endDrag';
+    readonly dragId: string;
   };
 
 type CodeEditorDispatch = React.Dispatch<CodeEditorAction>;
 
 interface CodeEditorState {
   readonly program: ProgramNode;
-  readonly dragDropLocs: ReadonlyMap<ASTNode, DropLoc>;
+  readonly potentialDrops: ReadonlyMap<string, { // key is dragId
+    readonly potentialNode: ASTNode;
+    readonly dropLoc: DropLoc;
+  }>;
 }
 
 function progReplaceNodeHelper(program: ProgramNode, oldPred: (node: ASTNode) => boolean, newNode: ASTNode): ProgramNode {
@@ -671,50 +696,53 @@ function reducer(state: CodeEditorState, action: CodeEditorAction): CodeEditorSt
       }
     }
 
-    case 'setNodeDragDropLoc': {
-      const newDragDropLocs = new Map(state.dragDropLocs);
-      newDragDropLocs.set(action.node, action.dropLoc);
+    case 'setPotentialDrop': {
+      const newPotentialDrops = new Map(state.potentialDrops);
+      newPotentialDrops.set(action.dragId, {
+        potentialNode: action.potentialNode,
+        dropLoc: action.dropLoc,
+      });
       return {
         ...state,
-        dragDropLocs: newDragDropLocs,
+        potentialDrops: newPotentialDrops,
       };
     }
 
-    case 'removeNodeDragDropLoc': {
-      if (state.dragDropLocs.has(action.node)) {
-        const newDragDropLocs = new Map(state.dragDropLocs);
-        newDragDropLocs.delete(action.node);
+    case 'removePotentialDrop': {
+      if (state.potentialDrops.has(action.dragId)) {
+        const newPotentialDrops = new Map(state.potentialDrops);
+        newPotentialDrops.delete(action.dragId);
         return {
           ...state,
-          dragDropLocs: newDragDropLocs,
+          potentialDrops: newPotentialDrops,
         };
       } else {
         return state;
       }
     }
 
-    case 'endNodeDrag': {
-      if (state.dragDropLocs.has(action.node)) {
-        const dropLoc = state.dragDropLocs.get(action.node);
-        invariant(dropLoc);
+    case 'endDrag': {
+      if (state.potentialDrops.has(action.dragId)) {
+        const pd = state.potentialDrops.get(action.dragId);
+        invariant(pd);
 
-        const newDragDropLocs = new Map(state.dragDropLocs);
-        newDragDropLocs.delete(action.node);
+        const newPotentialDrops = new Map(state.potentialDrops);
+        newPotentialDrops.delete(action.dragId);
 
-        switch (dropLoc.type) {
+        switch (pd.dropLoc.type) {
           case 'ontoNode': {
             return {
               ...state,
-              program: progReplaceNodeId(state.program, dropLoc.nodeId, action.node),
-              dragDropLocs: newDragDropLocs,
+              program: progReplaceNodeId(state.program, pd.dropLoc.nodeId, pd.potentialNode),
+              potentialDrops: newPotentialDrops,
             };
           }
 
           case 'intoList': {
             return {
               ...state,
-              program: progInsertListNode(state.program, dropLoc.nodeId, dropLoc.idx, action.node),
-              dragDropLocs: newDragDropLocs,
+              program: progInsertListNode(state.program, pd.dropLoc.nodeId, pd.dropLoc.idx, pd.potentialNode),
+              potentialDrops: newPotentialDrops,
             };
           }
         }
@@ -729,7 +757,7 @@ const CodeEditor: React.FC<{editorCtx: EditorContext<Code, undefined>}> = ({edit
   const [state, dispatch] = useReducer(reducer, null, (): CodeEditorState => {
     return {
       program: editorCtx.initialValue,
-      dragDropLocs: new Map(),
+      potentialDrops: new Map(),
     };
   });
 
@@ -756,6 +784,12 @@ const CodeEditor: React.FC<{editorCtx: EditorContext<Code, undefined>}> = ({edit
       params: [
         {pid: 'a', type: {type: 'Num'}},
         {pid: 'b', type: {type: 'Num'}},
+      ],
+    }],
+    ['nearestInstPos', {
+      tmpl: 'position of nearest {sprite|Sprite}',
+      params: [
+        {pid: 'sprite', type: {type: 'EV', typeId: 'sprite'}},
       ],
     }],
   ];
@@ -803,15 +837,14 @@ const CodeEditor: React.FC<{editorCtx: EditorContext<Code, undefined>}> = ({edit
     },
     {
       type: 'Literal',
-      nid: 'palette-number-',
-      subtype: 'number',
-      value: 0,
+      nid: 'palette-number-0',
+      sub: {type: 'number', value: 0},
     },
     {
       type: 'Eq',
       nid: 'palette-return-move-speed-num',
       lhs: {type: 'VarRef', nid: 'eq_lhs', refId: 'moveSpeed'},
-      rhs: {type: 'Literal', nid: 'eq_rhs', subtype: 'number', value: 10},
+      rhs: {type: 'Literal', nid: 'eq_rhs', sub: {type: 'number', value: 10}},
     },
     {
       type: 'VarRef',
@@ -841,14 +874,24 @@ const CodeEditor: React.FC<{editorCtx: EditorContext<Code, undefined>}> = ({edit
     };
 
     const ne = e.nativeEvent as PointerEvent;
-    const dv = (ne as any).draggingValue as (ValueDragInfo | undefined);
-    if (!dv) {
+    const di = (ne as any).dragInfo as (DragInfo | undefined);
+    if (!di) {
       return;
     }
-    if (dv.typeId !== 'codeEditor/node') {
+
+    let potentialNode: ASTNode | undefined = undefined;
+    if ((di.payload.type === 'value') && (di.payload.typeId === 'codeEditor/node')) {
+      potentialNode = di.payload.value;
+    } else if ((di.payload.type === 'ev') && (di.payload.ev.typeId === 'sprite')) {
+      potentialNode = {
+        type: 'Literal',
+        nid: genUidRandom(),
+        sub: {type: 'ev', value: di.payload.ev},
+      };
+    }
+    if (!potentialNode) {
       return;
     }
-    const draggedNode = dv.value as ASTNode;
 
     if (!editorRef.current) {
       return;
@@ -872,7 +915,7 @@ const CodeEditor: React.FC<{editorCtx: EditorContext<Code, undefined>}> = ({edit
 
         const allowed = sepElem.getAttribute('data-allowed');
         invariant(allowed !== null);
-        if (!matchesAllowed(draggedNode, allowed)) {
+        if (!matchesAllowed(potentialNode, allowed)) {
           continue;
         }
 
@@ -903,7 +946,7 @@ const CodeEditor: React.FC<{editorCtx: EditorContext<Code, undefined>}> = ({edit
 
         const allowed = nodeElem.getAttribute('data-allowed');
         invariant(allowed !== null);
-        if (!matchesAllowed(draggedNode, allowed)) {
+        if (!matchesAllowed(potentialNode, allowed)) {
           continue;
         }
 
@@ -923,39 +966,36 @@ const CodeEditor: React.FC<{editorCtx: EditorContext<Code, undefined>}> = ({edit
 
       if (nearestDropLoc) {
         dispatch({
-          type: 'setNodeDragDropLoc',
-          node: draggedNode,
+          type: 'setPotentialDrop',
+          dragId: di.dragId,
+          potentialNode,
           dropLoc: nearestDropLoc,
         });
       } else {
         dispatch({
-          type: 'removeNodeDragDropLoc',
-          node: draggedNode,
+          type: 'removePotentialDrop',
+          dragId: di.dragId,
         });
       }
     } else {
       // not inside code area
       dispatch({
-        type: 'removeNodeDragDropLoc',
-        node: draggedNode,
+        type: 'removePotentialDrop',
+        dragId: di.dragId,
       });
     }
   };
 
   const handlePointerUp = (e: React.PointerEvent) => {
     const ne = e.nativeEvent as PointerEvent;
-    const dv = (ne as any).draggingValue as (ValueDragInfo | undefined);
-    if (!dv) {
+    const di = (ne as any).dragInfo as (DragInfo | undefined);
+    if (!di) {
       return;
     }
-    if (dv.typeId !== 'codeEditor/node') {
-      return;
-    }
-    const draggedNode = dv.value as ASTNode;
 
     dispatch({
-      type: 'endNodeDrag',
-      node: draggedNode,
+      type: 'endDrag',
+      dragId: di.dragId,
     });
   };
 
@@ -995,7 +1035,7 @@ const CodeEditor: React.FC<{editorCtx: EditorContext<Code, undefined>}> = ({edit
             dispatch,
             allowDrag: 'yes',
             editorCtx,
-            dropLocs: [...state.dragDropLocs.values()],
+            dropLocs: [...state.potentialDrops.values()].map(info => info.dropLoc),
           }}
         />
       </div>

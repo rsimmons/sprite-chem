@@ -1,3 +1,5 @@
+import { EVWrapper } from "../../extlib/ev";
+
 export type Name = string;
 
 export type NodeId = string;
@@ -10,8 +12,12 @@ export interface HoleNode {
 export interface LiteralNode {
   readonly type: 'Literal';
   readonly nid: NodeId;
-  readonly subtype: 'number' | 'string' | 'boolean';
-  readonly value: any;
+  readonly sub:
+    | { readonly type: 'number'; readonly value: number }
+    | { readonly type: 'string'; readonly value: string }
+    | { readonly type: 'boolean'; readonly value: boolean }
+    | { readonly type: 'ev'; readonly value: EVWrapper<any> }
+    ;
 }
 
 // note that we don't allow applying arbitrary expressions, to simplify for now

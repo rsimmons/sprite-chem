@@ -15,8 +15,6 @@ const PoolTabPanel: React.FC<{
   const handlePointerDown = (e: React.PointerEvent, ev: EVWrapper<any>) => {
     e.preventDefault();
 
-    setSelectedEV(ev);
-
     // release capture if we implicitly got it (happens with touch by default)
     if (!(e.target instanceof HTMLElement)) {
       throw new Error('unclear if this can happen');
@@ -58,6 +56,12 @@ const PoolTabPanel: React.FC<{
     });
   };
 
+  const handleClick = (e: React.MouseEvent, ev: EVWrapper<any>) => {
+    e.preventDefault();
+
+    setSelectedEV(ev);
+  };
+
   const poolEVs = state.pools.get(globalId);
   invariant(poolEVs);
 
@@ -71,6 +75,7 @@ const PoolTabPanel: React.FC<{
             key={getObjId(ev)}
             className={`PoolTabPanel-preview-container ${selectedEV === ev ? 'PoolTabPanel-preview-container-selected' : ''}`}
             onPointerDown={e => handlePointerDown(e, ev)}
+            onClick={e => handleClick(e, ev)}
           >
             <PreviewerContainer ev={ev} />
           </div>

@@ -2,7 +2,7 @@ import { EVWrapper } from "../../extlib/ev";
 import { Runner } from "../../extlib/runner";
 import { DynamicContext, interpretProg } from "../../extshared/codeExec";
 import { createRenderCanvas, SpriteInstances } from "../../extshared/spriteWorld";
-import { vec2add, vec2len, vec2scale, vec2sub } from "../../vec";
+import { Vec2, vec2add, vec2len, vec2scale, vec2sub } from "../../vec";
 import { Sprite } from "../types/sprite";
 import { SpriteWorldSetup } from "../types/spriteWorldSetup";
 
@@ -43,8 +43,26 @@ function advanceWorldState(state: SpriteWorldState, t: number, dt: number): void
     const prog = spriteEV.value.code;
     for (const inst of spriteInfo.instances) {
       const dynCtx: DynamicContext = {
-        nidVal: new Map([
+        nidVal: new Map<string, any>([
           ['origin', {x: 0, y: 0}],
+          ['nearestInstPos', (spriteEv: EVWrapper<Sprite>): (Vec2 | undefined) => {
+            let nearestPos: {x: number; y: number} | undefined = undefined;
+            let nearestDistSq: number = Infinity;
+
+            const spriteInfo = state.sprites.get(spriteEv);
+            if (spriteInfo) {
+              for (const other of spriteInfo.instances) {
+                const diff = vec2sub(other.pos, inst.pos);
+                const distSq = vec2len(diff);
+                if (distSq < nearestDistSq) {
+                  nearestPos = other.pos;
+                  nearestDistSq = distSq;
+                }
+              }
+            }
+
+            return nearestPos;
+          }],
         ]),
       };
 
@@ -53,7 +71,7 @@ function advanceWorldState(state: SpriteWorldState, t: number, dt: number): void
       const moveTarget = dynCtx.nidVal.get('moveTarget');
       const moveSpeed = dynCtx.nidVal.get('moveSpeed') || 10;
 
-      if (moveTarget) {
+      if (moveTarget !== undefined) {
         const diff = vec2sub(moveTarget, inst.pos);
         const dist = vec2len(diff);
         const maxDist = moveSpeed*dt;

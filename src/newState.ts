@@ -1,13 +1,14 @@
 import { TEMPLATE } from "./config";
 import { PointerID } from "./extlib/editor";
 import { EVWrapper } from "./extlib/ev";
-import { arrRemoveElemByValue, arrReplaceElemByValue, invariant } from "./util";
+import { arrRemoveElemByValue, arrReplaceElemByValue, genUidRandom, invariant } from "./util";
 import { Vec2 } from "./vec";
 
 export type DragState =
   {
     // has not yet "detached"
     readonly type: 'detachingEV';
+    readonly dragId: string;
     readonly pointerId: PointerID;
     readonly ev: EVWrapper<any>;
     readonly pos: Vec2;
@@ -16,6 +17,7 @@ export type DragState =
     readonly startPos: Vec2;
   } | {
     readonly type: 'draggingEV';
+    readonly dragId: string;
     readonly pointerId: PointerID;
     readonly ev: EVWrapper<any>;
     readonly pos: Vec2;
@@ -23,6 +25,7 @@ export type DragState =
     readonly offset: Vec2; // relative to [-0.5, -0.5] to [0.5, 0.5] enclosing square
   } | {
     readonly type: 'draggingValue';
+    readonly dragId: string;
     readonly pointerId: PointerID;
     readonly typeId: string;
     readonly value: any;
@@ -123,6 +126,7 @@ export function reducer(state: AppStateOrLoading, action: AppAction): AppStateOr
           const newDs: DragState = ((action.pos.x - ds.startPos.x) > 15) ?
             {
               type: 'draggingEV',
+              dragId: ds.dragId,
               pointerId: ds.pointerId,
               ev: ds.ev,
               pos: ds.pos,
@@ -184,6 +188,7 @@ export function reducer(state: AppStateOrLoading, action: AppAction): AppStateOr
         ...state,
         dragStates: state.dragStates.concat([{
           type: 'detachingEV',
+          dragId: genUidRandom(),
           pointerId: action.pointerId,
           ev: action.ev,
           pos: action.pos,
@@ -199,6 +204,7 @@ export function reducer(state: AppStateOrLoading, action: AppAction): AppStateOr
         ...state,
         dragStates: state.dragStates.concat([{
           type: 'draggingValue',
+          dragId: genUidRandom(),
           pointerId: action.pointerId,
           typeId: action.typeId,
           value: action.value,

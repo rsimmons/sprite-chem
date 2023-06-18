@@ -11,15 +11,16 @@ function evalValueExpr(expr: ValueExprNode, dynCtx: DynamicContext): any {
       throw new Error('hole');
 
     case 'Literal':
-      return expr.value;
+      return expr.sub.value;
 
     case 'VarRef':
       return dynCtx.nidVal.get(expr.refId);
 
     case 'FnApp': {
       const fnVal = dynCtx.nidVal.get(expr.fn);
-      // const argVals = expr.args.map(arg => evalValueExpr(arg, dynCtx));
-      throw new Error('unimplemented');
+      const argVals = [...expr.args.values()].map(argExpr => evalValueExpr(argExpr, dynCtx));
+      const retVal = fnVal(...argVals);
+      return retVal;
     }
   }
 }

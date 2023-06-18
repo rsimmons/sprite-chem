@@ -2,16 +2,22 @@ import { EVWrapper } from "./ev";
 
 export type PointerID = 'mouse' | number;
 
-// attached to DOM events pointermove, pointerup
-export interface EVDragInfo {
-  readonly ev: EVWrapper<any>
-  readonly size: number;
-  readonly offset: {x: number, y: number};
-}
+export type DragPayload =
+  {
+    readonly type: 'ev';
+    readonly ev: EVWrapper<any>;
+  } | {
+    readonly type: 'value';
+    readonly typeId: string;
+    readonly value: any;
+  };
 
-export interface ValueDragInfo {
-  readonly typeId: string;
-  readonly value: any;
+// attached to DOM events pointermove, pointerup
+export interface DragInfo {
+  readonly dragId: string; // stable unique ID for this drag
+  readonly payload: DragPayload;
+  readonly width: number;
+  readonly height: number;
   readonly offset: {x: number, y: number};
 }
 

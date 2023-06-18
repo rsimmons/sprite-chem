@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 
 import PoolTabPanel from './PoolTabPanel';
-import { EVDragInfo, ValueDragInfo, PointerID } from './extlib/editor';
+import { DragInfo, PointerID } from './extlib/editor';
 import { ClientXY, invariant } from './util';
 import { AppAction, AppStateOrLoading, DragState, createInitState, reducer } from './newState';
 import EditorContainer from './EditorContainer';
@@ -60,22 +60,33 @@ const App: React.FC = () => {
       switch (ds.type) {
         case 'detachingEV':
         case 'draggingEV': {
-          const di: EVDragInfo = {
-            ev: ds.ev,
-            size: ds.size,
+          const di: DragInfo = {
+            dragId: ds.dragId,
+            payload: {
+              type: 'ev',
+              ev: ds.ev,
+            },
+            width: ds.size,
+            height: ds.size,
             offset: ds.offset,
           };
-          e.draggingEV = di;
+          e.dragInfo = di;
           break;
         }
 
         case 'draggingValue': {
-          const di: ValueDragInfo = {
-            typeId: ds.typeId,
-            value: ds.value,
+          const di: DragInfo = {
+            dragId: ds.dragId,
+            payload: {
+              type: 'value',
+              typeId: ds.typeId,
+              value: ds.value,
+            },
+            width: 0, // TODO: set these
+            height: 0,
             offset: ds.offset,
           };
-          e.draggingValue = di;
+          e.dragInfo = di;
           break;
         }
 

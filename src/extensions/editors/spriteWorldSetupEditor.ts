@@ -1,5 +1,5 @@
 import { Sprite } from '../types/sprite';
-import { Editor, EVDragInfo } from '../../extlib/editor';
+import { Editor, DragInfo } from '../../extlib/editor';
 import { SpriteWorldSetup } from '../types/spriteWorldSetup';
 import { createRenderCanvas, SpriteInstances } from '../../extshared/spriteWorld';
 import { invariant } from '../../util';
@@ -63,34 +63,35 @@ const spriteWorldSetupEditor: Editor<SpriteWorldSetup, undefined> = {
       };
     });
 
-    const getEventDragData = (e: PointerEvent): EVDragInfo | undefined => {
-      return (e as any).draggingEV as (EVDragInfo | undefined);
+    const getEventDragInfo = (e: PointerEvent): DragInfo | undefined => {
+      return (e as any).dragInfo as (DragInfo | undefined);
     }
 
     const handlePointerUp = (e: PointerEvent) => {
-      const dragData = getEventDragData(e);
-      if (dragData) {
-        if (dragData.ev.typeId === 'sprite') {
+      const di = getEventDragInfo(e);
+      if (di) {
+        if ((di.payload.type === 'ev') && (di.payload.ev.typeId === 'sprite')) {
+          const spriteEV = di.payload.ev as EVWrapper<Sprite>;
           const newInstances = new Map(editedValue.instances);
-          if (!newInstances.has(dragData.ev)) {
-            newInstances.set(dragData.ev, []);
+          if (!newInstances.has(spriteEV)) {
+            newInstances.set(spriteEV, []);
             const info: CachedSpriteInfo = {
-              sprite: dragData.ev.value as Sprite,
+              sprite: spriteEV.value,
               bitmapInfo: undefined,
             };
-            cachedSpriteInfo.set(dragData.ev, info);
+            cachedSpriteInfo.set(spriteEV, info);
             loadBitmap(info);
           }
 
           const rect = canvas.getBoundingClientRect();
-          newInstances.set(dragData.ev, newInstances.get(dragData.ev)!.concat([{
-            // NOTE: position we create is for center of sprite, but in dragData
+          newInstances.set(spriteEV, newInstances.get(spriteEV)!.concat([{
+            // NOTE: position we create is for center of sprite, but in di
             // position is for top-left corner of containing square
             pos: {
-              x: pixelScale*(e.clientX - rect.left + dragData.size*(0.5 - dragData.offset.x)),
-              y: pixelScale*(e.clientY - rect.top + dragData.size*(0.5 - dragData.offset.y)),
+              x: pixelScale*(e.clientX - rect.left + di.width*(0.5 - di.offset.x)),
+              y: pixelScale*(e.clientY - rect.top + di.height*(0.5 - di.offset.y)),
             },
-            size: pixelScale*dragData.size,
+            size: pixelScale*di.width,
           }]));
 
           editedValue = {
