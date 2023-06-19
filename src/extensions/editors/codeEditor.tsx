@@ -5,6 +5,9 @@ import { genUidRandom, insertIntoArray, invariant } from '../../util';
 import { Vec2, vec2dist, vec2sub } from '../../vec';
 import { ASTNode, Code, DeclNode, EqNode, FnAppNode, HoleNode, isBindExprNode, isDeclNode, isProgramNode, isValueExprNode, LiteralNode, Name, NodeId, ProgramNode, ValueExprNode, VarNameNode, VarRefNode } from '../types/code';
 import './codeEditor.css';
+import { EVWrapper } from '../../extlib/ev';
+import { Previewer, PreviewerReturn } from '../../extlib/previewer';
+import { useConstant } from '../../utilReact';
 
 interface Rect {
   left: number;
@@ -357,6 +360,34 @@ const HoleView: React.FC<{node: HoleNode, ctx: NodeViewCtx, isListItem: boolean,
   );
 };
 
+const EVPreview: React.FC<{ev: EVWrapper<any>, previewer: Previewer<any>}> = ({ev, previewer}) => {
+  useConstant(ev);
+  useConstant(previewer);
+
+  const containerRef = useRef<HTMLDivElement>(null);
+  const previewerReturnRef = useRef<PreviewerReturn<any> | null>(null);
+
+  useEffect(() => {
+    invariant(containerRef.current);
+
+    invariant(!previewerReturnRef.current);
+    previewerReturnRef.current = previewer.create({
+      container: containerRef.current,
+      ev,
+    });
+
+    return () => {
+      invariant(previewerReturnRef.current);
+      if (previewerReturnRef.current.cleanup) {
+        previewerReturnRef.current.cleanup();
+      }
+      previewerReturnRef.current = null;
+    };
+  }, []);
+
+  return <div ref={containerRef} className="CodeEditor-EVPreview" />;
+};
+
 const LiteralView: React.FC<{node: LiteralNode, ctx: NodeViewCtx, isListItem: boolean, allowed: string}> = ({node, ctx, isListItem, allowed}) => {
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     let newValue: string | number | boolean;
@@ -399,7 +430,7 @@ const LiteralView: React.FC<{node: LiteralNode, ctx: NodeViewCtx, isListItem: bo
   };
 
   return (
-    <Block node={node} ctx={ctx} style="expr" isListItem={isListItem} allowed={allowed}>
+    <Block node={node} ctx={ctx} style={(node.sub.type === 'ev') ? 'ev' : 'expr'} isListItem={isListItem} allowed={allowed}>
       <BlockLine>
         {(() => {
           switch (node.sub.type) {
@@ -409,8 +440,11 @@ const LiteralView: React.FC<{node: LiteralNode, ctx: NodeViewCtx, isListItem: bo
             case 'number':
               return <input type="number" value={node.sub.value} onChange={handleChange} />
 
-            case 'ev':
-              return <BlockLineText text={'<ev>'} />
+            case 'ev': {
+              const previewer = ctx.editorCtx.getPreviewer(node.sub.value.typeId);
+              invariant(previewer);
+              return <EVPreview ev={node.sub.value} previewer={previewer} />
+            }
 
             default:
               throw new Error('unimplemented: ' + node.sub.type);

@@ -6,6 +6,7 @@ import { AppDispatch } from './newState';
 import { useConstant } from './utilReact';
 import './EditorContainer.css';
 import { EVWrapper } from './extlib/ev';
+import { EVTypeId } from './extlib/type';
 
 const EditorContainer: React.FC<{
   readonly ev: EVWrapper<any>;
@@ -53,6 +54,9 @@ const EditorContainer: React.FC<{
           node,
           offset,
         });
+      },
+      getPreviewer: (typeId) => {
+        return TEMPLATE.previewers[typeId];
       },
     });
 

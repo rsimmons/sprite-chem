@@ -19,6 +19,7 @@ const spriteEditor: Editor<Sprite, undefined> = {
       },
       config: undefined,
       beginDrag: context.beginDrag,
+      getPreviewer: context.getPreviewer,
     };
 
     const codeEditorRet = codeEditor.create(codeEditorCtx);

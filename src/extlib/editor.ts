@@ -1,4 +1,6 @@
 import { EVWrapper } from "./ev";
+import { Previewer } from "./previewer";
+import { EVTypeId } from "./type";
 
 export type PointerID = 'mouse' | number;
 
@@ -57,6 +59,11 @@ export interface EditorContext<T, C> {
     offset: {x: number, y: number},
     // TODO: optional callback(s) to get notified of drag end, etc.
   ) => void;
+
+  /**
+   * Get an EV previewer for a given type ID (if one exists)
+   */
+  readonly getPreviewer: (typeId: EVTypeId) => Previewer<any> | undefined;
 }
 
 export interface EditorReturn<T> {
