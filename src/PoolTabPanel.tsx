@@ -11,7 +11,8 @@ const PoolTabPanel: React.FC<{
   readonly globalId: string;
   readonly state: AppState;
   readonly dispatch: AppDispatch;
-}> = ({globalId, state, dispatch}) => {
+  readonly pointerEventTarget: EventTarget;
+}> = ({globalId, state, dispatch, pointerEventTarget}) => {
   const handlePointerDown = (e: React.PointerEvent, ev: EVWrapper<any>) => {
     e.preventDefault();
 
@@ -88,6 +89,7 @@ const PoolTabPanel: React.FC<{
             key={getObjId(selectedEV)}
             ev={selectedEV}
             dispatch={dispatch}
+            pointerEventTarget={pointerEventTarget}
           />
         )}
       </div>

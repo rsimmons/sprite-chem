@@ -1,9 +1,10 @@
 import { Sprite } from '../types/sprite';
-import { Editor, DragInfo } from '../../extlib/editor';
+import { Editor, DragInfo, PointerEventData } from '../../extlib/editor';
 import { SpriteWorldSetup } from '../types/spriteWorldSetup';
 import { createRenderCanvas, SpriteInstances } from '../../extshared/spriteWorld';
 import { invariant } from '../../util';
 import { EVWrapper } from '../../extlib/ev';
+import { useEffect } from 'react';
 
 const spriteWorldSetupEditor: Editor<SpriteWorldSetup, undefined> = {
   create: (context) => {
@@ -67,8 +68,11 @@ const spriteWorldSetupEditor: Editor<SpriteWorldSetup, undefined> = {
       return (e as any).dragInfo as (DragInfo | undefined);
     }
 
-    const handlePointerUp = (e: PointerEvent) => {
-      const di = getEventDragInfo(e);
+    const handlePointerUp = (e: Event) => {
+      const ed = (e as CustomEvent<PointerEventData>).detail;
+      invariant(ed);
+
+      const di = ed.dragInfo;
       if (di) {
         if ((di.payload.type === 'ev') && (di.payload.ev.typeId === 'sprite')) {
           const spriteEV = di.payload.ev as EVWrapper<Sprite>;
@@ -88,8 +92,8 @@ const spriteWorldSetupEditor: Editor<SpriteWorldSetup, undefined> = {
             // NOTE: position we create is for center of sprite, but in di
             // position is for top-left corner of containing square
             pos: {
-              x: pixelScale*(e.clientX - rect.left + di.width*(0.5 - di.offset.x)),
-              y: pixelScale*(e.clientY - rect.top + di.height*(0.5 - di.offset.y)),
+              x: pixelScale*(ed.pos.x - rect.left + di.width*(0.5 - di.offset.x)),
+              y: pixelScale*(ed.pos.y - rect.top + di.height*(0.5 - di.offset.y)),
             },
             size: pixelScale*di.width,
           }]));
@@ -104,11 +108,11 @@ const spriteWorldSetupEditor: Editor<SpriteWorldSetup, undefined> = {
       }
     };
 
-    canvas.addEventListener('pointerup', handlePointerUp, false);
+    context.pointerEventTarget.addEventListener('pointerUp', handlePointerUp);
 
     return {
       cleanup: () => {
-        canvas.removeEventListener('pointerup', handlePointerUp, false);
+        context.pointerEventTarget.removeEventListener('pointerUp', handlePointerUp);
         cleanup();
       },
     };

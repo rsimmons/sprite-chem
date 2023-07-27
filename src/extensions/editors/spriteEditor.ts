@@ -19,6 +19,7 @@ const spriteEditor: Editor<Sprite, undefined> = {
       },
       config: undefined,
       beginDrag: context.beginDrag,
+      pointerEventTarget: context.pointerEventTarget,
       getPreviewer: context.getPreviewer,
     };
 

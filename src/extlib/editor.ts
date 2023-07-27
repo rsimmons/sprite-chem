@@ -14,7 +14,12 @@ export type DragPayload =
     readonly value: any;
   };
 
-// attached to DOM events pointermove, pointerup
+export interface PointerEventData {
+  pointerId: PointerID;
+  pos: {x: number, y: number};
+  dragInfo: DragInfo | undefined;
+}
+
 export interface DragInfo {
   readonly dragId: string; // stable unique ID for this drag
   readonly payload: DragPayload;
@@ -59,6 +64,10 @@ export interface EditorContext<T, C> {
     offset: {x: number, y: number},
     // TODO: optional callback(s) to get notified of drag end, etc.
   ) => void;
+
+  // events fired are 'pointerMove' and 'pointerUp',
+  // and details are of type PointerEventData
+  readonly pointerEventTarget: EventTarget;
 
   /**
    * Get an EV previewer for a given type ID (if one exists)

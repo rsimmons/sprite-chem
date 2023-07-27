@@ -1,7 +1,7 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 
 import PoolTabPanel from './PoolTabPanel';
-import { DragInfo, PointerID } from './extlib/editor';
+import { DragInfo, PointerEventData, PointerID } from './extlib/editor';
 import { ClientXY, invariant } from './util';
 import { AppAction, AppStateOrLoading, DragState, createInitState, reducer } from './newState';
 import EditorContainer from './EditorContainer';
@@ -26,6 +26,8 @@ const App: React.FC = () => {
   const [stateRef, dispatch] = useEffectfulReducer<AppStateOrLoading, AppAction>(reducer, () => 'loading');
   const state = stateRef.current;
 
+  const pointerEventTarget = useRef(new EventTarget());
+
   useRunOnce(() => {
     (async () => {
       dispatch({
@@ -36,13 +38,27 @@ const App: React.FC = () => {
   });
 
   const handlePointerMoveUp = (e: PointerEvent, type: 'pointerMove'|'pointerUp') => {
+    const pos = {
+      x: e.clientX,
+      y: e.clientY,
+    };
+
+    // dispatch an event on the target that we pass to child components
+    // so as to notify extensions
+    const ed: PointerEventData = {
+      pointerId: e.pointerId,
+      pos,
+      dragInfo: createDragInfo(e.pointerId),
+    };
+    const pe = new CustomEvent(type, {
+      detail: ed,
+    });
+    pointerEventTarget.current.dispatchEvent(pe);
+
     dispatch({
       type,
       pointerId: e.pointerId,
-      pos: {
-        x: e.clientX,
-        y: e.clientY,
-      },
+      pos,
     });
   }
   const handlePointerMove = (e: PointerEvent) => {
@@ -52,7 +68,7 @@ const App: React.FC = () => {
     handlePointerMoveUp(e, 'pointerUp');
   };
 
-  const attachDragData = (pointerId: PointerID, e: any): void => {
+  const createDragInfo = (pointerId: PointerID): DragInfo | undefined => {
     invariant(state !== 'loading');
     const matchDragStates = state.dragStates.filter(s => (s.pointerId === pointerId));
     if (matchDragStates.length === 1) {
@@ -70,8 +86,7 @@ const App: React.FC = () => {
             height: ds.size,
             offset: ds.offset,
           };
-          e.dragInfo = di;
-          break;
+          return di;
         }
 
         case 'draggingValue': {
@@ -86,8 +101,7 @@ const App: React.FC = () => {
             height: 0,
             offset: ds.offset,
           };
-          e.dragInfo = di;
-          break;
+          return di;
         }
 
         default:
@@ -95,28 +109,19 @@ const App: React.FC = () => {
       }
     } else {
       invariant(matchDragStates.length === 0);
+      return undefined;
     }
-  };
-  const handlePointerMoveCapture = (e: PointerEvent) => {
-    attachDragData(e.pointerId, e);
-  };
-  const handlePointerUpCapture = (e: PointerEvent) => {
-    attachDragData(e.pointerId, e);
   };
 
   useEffect(() => {
    window.addEventListener('pointermove', handlePointerMove, false);
    window.addEventListener('pointerup', handlePointerUp, false);
-   window.addEventListener('pointermove', handlePointerMoveCapture, true);
-   window.addEventListener('pointerup', handlePointerUpCapture, true);
 
     return () => {
       window.removeEventListener('pointermove', handlePointerMove, false);
       window.removeEventListener('pointerup', handlePointerUp, false);
-      window.removeEventListener('pointermove', handlePointerMoveCapture, true);
-      window.removeEventListener('pointerup', handlePointerUpCapture, true);
     };
-  });
+  }, [handlePointerMove, handlePointerUp]);
 
   const handleTabLinkClick = (e: React.MouseEvent, tabId: string) => {
     e.preventDefault();
@@ -164,7 +169,14 @@ const App: React.FC = () => {
                         case 'pool': {
                           const pool = TEMPLATE.pools.find(p => (p.globalId === tab.globalId));
                           invariant(pool);
-                          return <PoolTabPanel globalId={pool.globalId} state={state} dispatch={dispatch} />
+                          return (
+                            <PoolTabPanel
+                              globalId={pool.globalId}
+                              state={state}
+                              dispatch={dispatch}
+                              pointerEventTarget={pointerEventTarget.current}
+                            />
+                          );
                         }
                       }
 
@@ -184,6 +196,7 @@ const App: React.FC = () => {
                 <EditorContainer
                   ev={stoppedEditorEV}
                   dispatch={dispatch}
+                  pointerEventTarget={pointerEventTarget.current}
                 />
               )}
             </div>

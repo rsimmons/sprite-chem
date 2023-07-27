@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useReducer, useRef } from 'react';
 import ReactDOM from 'react-dom/client';
-import { Editor, EditorContext, DragInfo, DragPayload } from '../../extlib/editor';
+import { Editor, EditorContext, DragInfo, DragPayload, PointerEventData } from '../../extlib/editor';
 import { genUidRandom, insertIntoArray, invariant } from '../../util';
 import { Vec2, vec2dist, vec2sub } from '../../vec';
 import { ASTNode, Code, DeclNode, EqNode, FnAppNode, HoleNode, isBindExprNode, isDeclNode, isProgramNode, isValueExprNode, LiteralNode, Name, NodeId, ProgramNode, ValueExprNode, VarNameNode, VarRefNode } from '../types/code';
@@ -887,7 +887,10 @@ const CodeEditor: React.FC<{editorCtx: EditorContext<Code, undefined>}> = ({edit
     },
   ];
 
-  const handlePointerMove = (e: React.PointerEvent) => {
+  const handlePointerMove = (e: Event) => {
+    const ed = (e as CustomEvent<PointerEventData>).detail;
+    invariant(ed);
+
     const matchesAllowed = (node: ASTNode, allowed: string) => {
       switch (allowed) {
         case 'decl':
@@ -907,8 +910,7 @@ const CodeEditor: React.FC<{editorCtx: EditorContext<Code, undefined>}> = ({edit
       }
     };
 
-    const ne = e.nativeEvent as PointerEvent;
-    const di = (ne as any).dragInfo as (DragInfo | undefined);
+    const di = ed.dragInfo;
     if (!di) {
       return;
     }
@@ -933,7 +935,7 @@ const CodeEditor: React.FC<{editorCtx: EditorContext<Code, undefined>}> = ({edit
     const codeArea = editorRef.current.querySelector('.CodeEditor-code');
     invariant(codeArea);
     const codeAreaRect = codeArea.getBoundingClientRect();
-    const insideCodeArea = pointInRect({x: ne.clientX, y: ne.clientY}, codeAreaRect);
+    const insideCodeArea = pointInRect(ed.pos, codeAreaRect);
 
     if (insideCodeArea) {
       // inside code area
@@ -941,7 +943,7 @@ const CodeEditor: React.FC<{editorCtx: EditorContext<Code, undefined>}> = ({edit
       let nearestDropLoc: DropLoc | undefined = undefined;
       let nearestDropLocDist = Infinity;
 
-      const dragPos = {x: ne.clientX, y: ne.clientY};
+      const dragPos = ed.pos;
 
       const sepElems = codeArea.querySelectorAll('.CodeEditor-block-vlist-sep');
       for (let i = 0; i < sepElems.length; i++) {
@@ -1020,9 +1022,11 @@ const CodeEditor: React.FC<{editorCtx: EditorContext<Code, undefined>}> = ({edit
     }
   };
 
-  const handlePointerUp = (e: React.PointerEvent) => {
-    const ne = e.nativeEvent as PointerEvent;
-    const di = (ne as any).dragInfo as (DragInfo | undefined);
+  const handlePointerUp = (e: Event) => {
+    const ed = (e as CustomEvent<PointerEventData>).detail;
+    invariant(ed);
+
+    const di = ed.dragInfo
     if (!di) {
       return;
     }
@@ -1033,11 +1037,18 @@ const CodeEditor: React.FC<{editorCtx: EditorContext<Code, undefined>}> = ({edit
     });
   };
 
+  useEffect(() => {
+    editorCtx.pointerEventTarget.addEventListener('pointerMove', handlePointerMove);
+    editorCtx.pointerEventTarget.addEventListener('pointerUp', handlePointerUp);
+    return () => {
+      editorCtx.pointerEventTarget.removeEventListener('pointerMove', handlePointerMove);
+      editorCtx.pointerEventTarget.removeEventListener('pointerUp', handlePointerUp);
+    };
+  }, [handlePointerMove, handlePointerUp]);
+
   return (
     <div
       className="CodeEditor"
-      onPointerMove={handlePointerMove}
-      onPointerUp={handlePointerUp}
       ref={editorRef}
     >
       <div className="CodeEditor-palette">

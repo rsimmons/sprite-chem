@@ -11,7 +11,8 @@ import { EVTypeId } from './extlib/type';
 const EditorContainer: React.FC<{
   readonly ev: EVWrapper<any>;
   readonly dispatch: AppDispatch;
-}> = ({ev, dispatch}) => {
+  readonly pointerEventTarget: EventTarget;
+}> = ({ev, dispatch, pointerEventTarget}) => {
   useConstant(ev);
   useConstant(dispatch);
 
@@ -55,6 +56,7 @@ const EditorContainer: React.FC<{
           offset,
         });
       },
+      pointerEventTarget,
       getPreviewer: (typeId) => {
         return TEMPLATE.previewers[typeId];
       },
