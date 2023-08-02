@@ -1,33 +1,50 @@
 import { Sprite } from '../types/sprite';
 import { Previewer } from '../../extlib/previewer';
 
-function createImage(container: HTMLElement, url: string): void {
-  container.innerHTML = `<div style="width: 100%; height: 100%; display: flex; justify-content: center; align-items: center"><img src="${url}" style="display: block; max-width: 100%; max-height: 100%" /></div>`;
-}
-
-async function blobToDataURL(blob: Blob): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-
-    reader.onload = () => {
-      if (typeof(reader.result) !== 'string') {
-        throw new Error('blobToDataURL reader result not string');
-      }
-      resolve(reader.result);
-    };
-    reader.onerror = reject;
-    reader.readAsDataURL(blob);
-  });
-}
-
 const spritePreviewer: Previewer<Sprite> = {
   create: (context) => {
-    const updateImage = async (blob: Blob): Promise<void> => {
-      const url = await blobToDataURL(blob);
-      createImage(context.container, url);
+    const container = context.container;
+    container.innerHTML = '<canvas style="width: 100%; height: 100%; display: block" />';
+    const canvas = container.querySelector('canvas')!;
+
+    const sizeCanvas = (): void => {
+      const USE_HIDPI = true;
+      const pixelScale = USE_HIDPI ? window.devicePixelRatio : 1;
+
+      const containerWidth = container.clientWidth;
+      const containerHeight = container.clientHeight;
+
+      const canvasWidth = pixelScale*containerWidth;
+      const canvasHeight = pixelScale*containerHeight;
+
+      // only do resize if necessary
+      if ((canvas.width !== canvasWidth) || (canvas.height !== canvasHeight)) {
+        canvas.width = canvasWidth;
+        canvas.height = canvasHeight;
+      }
     }
 
-    updateImage(context.ev.value.imageBlob); // don't await
+    const updateImage = (): void => {
+      const ctx = canvas.getContext('2d')!;
+
+      const bitmap = context.ev.value.imageBitmap;
+
+      const wScale = canvas.width/bitmap.width;
+      const hScale = canvas.height/bitmap.height;
+
+      const scale = Math.min(wScale, hScale);
+
+      const sWidth = scale*bitmap.width;
+      const sHeight = scale*bitmap.height;
+
+      const xOff = 0.5*(canvas.width - sWidth);
+      const yOff = 0.5*(canvas.height - sHeight);
+
+      ctx.drawImage(bitmap, xOff, yOff, sWidth, sHeight);
+    }
+
+    sizeCanvas();
+    updateImage();
 
     // TODO: subscribe to ev changes
 

@@ -26,26 +26,22 @@ const spriteWorldSetupEditor: Editor<SpriteWorldSetup, undefined> = {
     }
     const cachedSpriteInfo = new Map<EVWrapper<Sprite>, CachedSpriteInfo>();
 
-    const loadBitmap = (info: CachedSpriteInfo) => {
-      (async () => {
-        const bitmap = await createImageBitmap(info.sprite.imageBlob);
-        const invMaxDim = 1/Math.max(bitmap.width, bitmap.height);
-        info.bitmapInfo = {
-          bitmap,
-          scaledWidth: invMaxDim*bitmap.width,
-          scaledHeight: invMaxDim*bitmap.height,
-        };
-      })();
-    };
+    const getBitmapInfo = (bitmap: ImageBitmap): CachedSpriteInfo['bitmapInfo'] => {
+      const invMaxDim = 1/Math.max(bitmap.width, bitmap.height);
+      return {
+        bitmap,
+        scaledWidth: invMaxDim*bitmap.width,
+        scaledHeight: invMaxDim*bitmap.height,
+      };
+    }
 
     // handle dependencies of initial value
     editedValue.instances.forEach((insts, spriteEV) => {
       const info: CachedSpriteInfo = {
         sprite: spriteEV.value,
-        bitmapInfo: undefined,
+        bitmapInfo: getBitmapInfo(spriteEV.value.imageBitmap),
       };
       cachedSpriteInfo.set(spriteEV, info);
-      loadBitmap(info);
     });
 
     const {cleanup, canvas, pixelScale} = createRenderCanvas(context.container, () => {
@@ -126,10 +122,9 @@ const spriteWorldSetupEditor: Editor<SpriteWorldSetup, undefined> = {
             editedValue.instances.set(spriteEV, []);
             const info: CachedSpriteInfo = {
               sprite: spriteEV.value,
-              bitmapInfo: undefined,
+              bitmapInfo: getBitmapInfo(spriteEV.value.imageBitmap),
             };
             cachedSpriteInfo.set(spriteEV, info);
-            loadBitmap(info);
           }
 
           const insts = editedValue.instances.get(spriteEV)!;

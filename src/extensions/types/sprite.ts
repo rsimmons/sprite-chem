@@ -1,6 +1,6 @@
 import { Code } from "./code";
 
 export interface Sprite {
-  readonly imageBlob: Blob;
+  readonly imageBitmap: ImageBitmap;
   readonly code: Code;
 }

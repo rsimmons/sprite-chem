@@ -75,13 +75,15 @@ export const TEMPLATE: Template = {
     for (const url of [witch, monster, cyclops]) {
       const resp = await fetch(url);
       const blob = await resp.blob();
+      const imageBitmap = await createImageBitmap(blob);
+
       const initProg: ProgramNode = {
         type: 'Program',
         nid: 'program',
         decls: [],
       };
       const sprite = {
-        imageBlob: blob,
+        imageBitmap,
         code: initProg,
       };
       const spriteEV = createDevtimeEVWrapper<Sprite>('sprite', sprite);

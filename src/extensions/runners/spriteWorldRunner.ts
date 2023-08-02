@@ -94,40 +94,34 @@ const spriteWorldRunner: Runner = {
     const swsEv = context.singles.get('worldSetup')! as EVWrapper<SpriteWorldSetup>;
     const sws = swsEv.value;
 
-    // worldState is undefined until bitmaps are loaded
-    let worldState: SpriteWorldState | undefined;
+    const sprites = new Map<EVWrapper<Sprite>, SpriteInfo>();
 
-    // deep clone and load bitmaps, async
-    (async () => {
-      const sprites = new Map<EVWrapper<Sprite>, SpriteInfo>();
+    for (const [spriteEv, insts] of sws.instances.entries()) {
+      const sprite = spriteEv.value;
 
-      for (const [spriteEv, insts] of sws.instances.entries()) {
-        const sprite = spriteEv.value;
+      const bitmap = sprite.imageBitmap;
+      const invMaxDim = 1/Math.max(bitmap.width, bitmap.height);
 
-        const bitmap = await createImageBitmap(sprite.imageBlob);
-        const invMaxDim = 1/Math.max(bitmap.width, bitmap.height);
-
-        sprites.set(spriteEv, {
-          bitmapInfo: {
-            bitmap,
-            scaledWidth: invMaxDim*bitmap.width,
-            scaledHeight: invMaxDim*bitmap.height,
+      sprites.set(spriteEv, {
+        bitmapInfo: {
+          bitmap,
+          scaledWidth: invMaxDim*bitmap.width,
+          scaledHeight: invMaxDim*bitmap.height,
+        },
+        // deep clone
+        instances: insts.map(inst => ({
+          pos: {
+            x: inst.pos.x,
+            y: inst.pos.y,
           },
-          // deep clone
-          instances: insts.map(inst => ({
-            pos: {
-              x: inst.pos.x,
-              y: inst.pos.y,
-            },
-            size: inst.size,
-          })),
-        });
-      };
+          size: inst.size,
+        })),
+      });
+    };
 
-      worldState = {
-        sprites,
-      };
-    })();
+    const worldState: SpriteWorldState = {
+      sprites,
+    };
 
     const {cleanup: cleanupCanvas, canvas, pixelScale} = createRenderCanvas(context.container, (t: number, dt: number): RenderableState => {
       // this is getState callback
