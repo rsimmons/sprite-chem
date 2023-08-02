@@ -4,7 +4,7 @@ import { SpriteInstance, SpriteWorldSetup } from '../types/spriteWorldSetup';
 import { createRenderCanvas, getWorldToCanvasXform, SpriteInstances } from '../../extshared/spriteWorld';
 import { arrRemoveElemByValueInPlace, invariant } from '../../util';
 import { EVWrapper } from '../../extlib/ev';
-import { applyInvSTXform } from '../../vec';
+import { applyInvSTXform, applySTXform } from '../../vec';
 
 interface DraggedInstanceData {
   readonly spriteEV: EVWrapper<Sprite>;
@@ -97,16 +97,46 @@ const spriteWorldSetupEditor: Editor<SpriteWorldSetup, undefined> = {
           size: hitInst.size,
         };
 
-        const previewElem = document.createElement('div');
-        previewElem.innerHTML = 'sprite';
+        const spriteCornerCanvasPos = applySTXform(worldCanvasXform, {x: hitInst.pos.x - 0.5*hitInst.size, y: hitInst.pos.y - 0.5*hitInst.size});
+        const spriteCornerScreenPos = {x: spriteCornerCanvasPos.x/pixelScale + rect.left, y: spriteCornerCanvasPos.y/pixelScale + rect.top};
+        const spriteCanvasSize = worldCanvasXform.s*hitInst.size;
+        const spriteCSSSize = spriteCanvasSize/pixelScale;
+
+        const previewCanvas = document.createElement('canvas');
+        previewCanvas.style.width = `${spriteCSSSize}px`;
+        previewCanvas.style.height = `${spriteCSSSize}px`;
+
+        const canvasWidth = pixelScale*spriteCSSSize;
+        const canvasHeight = pixelScale*spriteCSSSize;
+        previewCanvas.width = canvasWidth;
+        previewCanvas.height = canvasHeight;
+
+        const bitmap = hitSprite.value.imageBitmap;
+
+        const wScale = canvasWidth/bitmap.width;
+        const hScale = canvasHeight/bitmap.height;
+
+        const scale = Math.min(wScale, hScale);
+
+        const sWidth = scale*bitmap.width;
+        const sHeight = scale*bitmap.height;
+
+        const xOff = 0.5*(canvasWidth - sWidth);
+        const yOff = 0.5*(canvasHeight - sHeight);
+
+        const ctx = previewCanvas.getContext('2d')!;
+        ctx.drawImage(bitmap, xOff, yOff, sWidth, sHeight);
+
+        const offset = {x: e.clientX - spriteCornerScreenPos.x, y: e.clientY - spriteCornerScreenPos.y};
 
         context.beginDragValue({
           pointerId: e.pointerId,
           typeId: 'spriteWorldSetupEditor/instance',
           value: dragValue,
           pos: {x: e.clientX, y: e.clientY},
-          previewElem,
-          offset: {x: 0, y: 0}, // TODO: compute offset
+          offset,
+          dims: {x: spriteCSSSize, y: spriteCSSSize},
+          previewElem: previewCanvas,
         });
       }
     };
@@ -147,7 +177,7 @@ const spriteWorldSetupEditor: Editor<SpriteWorldSetup, undefined> = {
         if ((di.payload.type === 'ev') && (di.payload.ev.typeId === 'sprite')) {
           const spriteEV = di.payload.ev as EVWrapper<Sprite>;
 
-          addInstance(spriteEV, worldCenter, pixelScale*Math.max(di.dims.x, di.dims.y)/worldCanvasXform.s);
+          addInstance(spriteEV, worldCenter, 3); //pixelScale*Math.max(di.dims.x, di.dims.y)/worldCanvasXform.s);
         } else if ((di.payload.type === 'value') && (di.payload.typeId === 'spriteWorldSetupEditor/instance')) {
           const val = di.payload.value as DraggedInstanceData;
           addInstance(val.spriteEV, worldCenter, val.size);

@@ -63,6 +63,7 @@ export type AppAction =
     readonly value: any;
     readonly pos: Vec2;
     readonly offset: Vec2;
+    readonly dims: Vec2;
     readonly previewElem: HTMLElement;
   } | {
     readonly type: 'pointerMove';
@@ -121,10 +122,6 @@ export function reducer(state: AppStateOrLoading, action: AppAction): AppStateOr
     }
 
     case 'beginDragValue': {
-      // measure the dimensions of the preview element
-      const rect = action.previewElem.getBoundingClientRect();
-      const dims = {x: rect.width, y: rect.height};
-
       return {
         ...state,
         dragStates: state.dragStates.concat([{
@@ -132,7 +129,7 @@ export function reducer(state: AppStateOrLoading, action: AppAction): AppStateOr
           pointerId: action.pointerId,
           pos: action.pos,
           offset: action.offset,
-          dims,
+          dims: action.dims,
           payload: {
             type: 'value',
             typeId: action.typeId,

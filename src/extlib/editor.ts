@@ -32,8 +32,9 @@ export interface BeginDragValueArgs {
   readonly typeId: string;
   readonly value: any;
   readonly pos: {x: number, y: number};
-  readonly previewElem: HTMLElement;
   readonly offset: {x: number, y: number};
+  readonly dims: {x: number, y: number};
+  readonly previewElem: HTMLElement;
 }
 
 export interface EditorContext<T, C> {

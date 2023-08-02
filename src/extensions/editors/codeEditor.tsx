@@ -273,8 +273,9 @@ const Block: React.FC<{children?: React.ReactNode, node: ASTNode, ctx: NodeViewC
         x: e.clientX,
         y: e.clientY,
       },
-      previewElem: blockElem.current.cloneNode(true) as HTMLElement,
       offset,
+      dims: {x: rect.width, y: rect.height},
+      previewElem: blockElem.current.cloneNode(true) as HTMLElement,
     });
   };
 
