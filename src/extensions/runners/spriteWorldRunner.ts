@@ -1,7 +1,7 @@
 import { EVWrapper } from "../../extlib/ev";
 import { Runner } from "../../extlib/runner";
 import { DynamicContext, interpretProg } from "../../extshared/codeExec";
-import { createRenderCanvas, SpriteInstances } from "../../extshared/spriteWorld";
+import { createRenderCanvas, RenderableState, SpriteInstances } from "../../extshared/spriteWorld";
 import { Vec2, vec2add, vec2len, vec2scale, vec2sub } from "../../vec";
 import { Sprite } from "../types/sprite";
 import { SpriteWorldSetup } from "../types/spriteWorldSetup";
@@ -129,7 +129,7 @@ const spriteWorldRunner: Runner = {
       };
     })();
 
-    const {cleanup: cleanupCanvas, canvas, pixelScale} = createRenderCanvas(context.container, (t: number, dt: number) => {
+    const {cleanup: cleanupCanvas, canvas, pixelScale} = createRenderCanvas(context.container, (t: number, dt: number): RenderableState => {
       // this is getState callback
       if (worldState) {
         advanceWorldState(worldState, t, dt);
@@ -145,11 +145,13 @@ const spriteWorldRunner: Runner = {
         });
         return {
           instances: renderInsts,
+          viewport: sws.viewport,
         };
       } else {
         // perhaps we should return some sort of "loading" flag
         return {
           instances: new Map(),
+          viewport: sws.viewport,
         };
       }
     });

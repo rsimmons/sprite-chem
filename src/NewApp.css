@@ -79,6 +79,5 @@
 }
 
 .App-drags {
-  pointer-events: none;
-  touch-action: none;
+  cursor: grabbing;
 }

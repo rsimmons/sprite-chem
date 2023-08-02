@@ -40,12 +40,12 @@ const PoolTabPanel: React.FC<{
     const rect = containerElem.getBoundingClientRect();
     const maxDim = Math.max(rect.width, rect.height);
     const offset: Vec2 = {
-      x: (e.clientX - rect.left)/maxDim,
-      y: (e.clientY - rect.top)/maxDim,
+      x: e.clientX - rect.left,
+      y: e.clientY - rect.top,
     };
 
     dispatch({
-      type: 'pointerDownOnEV',
+      type: 'beginDragEV',
       pointerId: e.pointerId,
       ev,
       pos: {

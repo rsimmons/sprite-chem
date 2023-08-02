@@ -38,21 +38,15 @@ const EditorContainer: React.FC<{
       valueChanged: (newValue) => {
         ev.setValue(newValue);
       },
-      beginDrag: (
-        typeId: string,
-        pointerId: PointerID,
-        value: any,
-        pos: {x: number, y: number},
-        node: HTMLElement | undefined,
-        offset: {x: number, y: number},
-      ) => {
+      beginDragValue: (args) => {
+        const {pointerId, typeId, value, pos, previewElem, offset} = args;
         dispatch({
-          type: 'pointerDownOnValue',
+          type: 'beginDragValue',
           pointerId,
           typeId,
           value,
           pos,
-          node,
+          previewElem,
           offset,
         });
       },

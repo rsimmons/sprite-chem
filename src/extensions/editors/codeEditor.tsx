@@ -265,17 +265,17 @@ const Block: React.FC<{children?: React.ReactNode, node: ASTNode, ctx: NodeViewC
       });
     }
 
-    ctx.editorCtx.beginDrag(
-      'codeEditor/node',
-      e.pointerId,
-      dragNode,
-      {
+    ctx.editorCtx.beginDragValue({
+      pointerId: e.pointerId,
+      typeId: 'codeEditor/node',
+      value: dragNode,
+      pos: {
         x: e.clientX,
         y: e.clientY,
       },
-      blockElem.current.cloneNode(true) as HTMLElement,
+      previewElem: blockElem.current.cloneNode(true) as HTMLElement,
       offset,
-    );
+    });
   };
 
   let dropHL = false;

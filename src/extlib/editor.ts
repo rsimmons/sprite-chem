@@ -23,8 +23,16 @@ export interface PointerEventData {
 export interface DragInfo {
   readonly dragId: string; // stable unique ID for this drag
   readonly payload: DragPayload;
-  readonly width: number;
-  readonly height: number;
+  readonly dims: {x: number, y: number};
+  readonly offset: {x: number, y: number};
+}
+
+export interface BeginDragValueArgs {
+  readonly pointerId: PointerID;
+  readonly typeId: string;
+  readonly value: any;
+  readonly pos: {x: number, y: number};
+  readonly previewElem: HTMLElement;
   readonly offset: {x: number, y: number};
 }
 
@@ -55,15 +63,7 @@ export interface EditorContext<T, C> {
   /**
    * Begin a drag of a value/object that is NOT an EV.
    */
-  readonly beginDrag: (
-    typeId: string,
-    pointerId: PointerID,
-    value: any,
-    pos: {x: number, y: number},
-    node: HTMLElement | undefined,
-    offset: {x: number, y: number},
-    // TODO: optional callback(s) to get notified of drag end, etc.
-  ) => void;
+  readonly beginDragValue: (args: BeginDragValueArgs) => void;
 
   // events fired are 'pointerMove' and 'pointerUp',
   // and details are of type PointerEventData

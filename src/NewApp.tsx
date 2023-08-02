@@ -3,7 +3,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import PoolTabPanel from './PoolTabPanel';
 import { DragInfo, PointerEventData, PointerID } from './extlib/editor';
 import { ClientXY, invariant } from './util';
-import { AppAction, AppStateOrLoading, DragState, createInitState, reducer } from './newState';
+import { AppAction, AppStateOrLoading, createInitState, reducer } from './newState';
 import EditorContainer from './EditorContainer';
 import PreviewerContainer from './PreviewerContainer';
 import RunnerContainer from './RunnerContainer';
@@ -73,40 +73,37 @@ const App: React.FC = () => {
     const matchDragStates = state.dragStates.filter(s => (s.pointerId === pointerId));
     if (matchDragStates.length === 1) {
       const ds = matchDragStates[0];
-      switch (ds.type) {
-        case 'detachingEV':
-        case 'draggingEV': {
-          const di: DragInfo = {
-            dragId: ds.dragId,
-            payload: {
-              type: 'ev',
-              ev: ds.ev,
-            },
-            width: ds.size,
-            height: ds.size,
-            offset: ds.offset,
+
+      let payload: DragInfo['payload'];
+      switch (ds.payload.type) {
+        case 'ev': {
+          payload = {
+            type: 'ev',
+            ev: ds.payload.ev,
           };
-          return di;
+          break;
         }
 
-        case 'draggingValue': {
-          const di: DragInfo = {
-            dragId: ds.dragId,
-            payload: {
-              type: 'value',
-              typeId: ds.typeId,
-              value: ds.value,
-            },
-            width: 0, // TODO: set these
-            height: 0,
-            offset: ds.offset,
+        case 'value': {
+          payload = {
+            type: 'value',
+            typeId: ds.payload.typeId,
+            value: ds.payload.value,
           };
-          return di;
+          break;
         }
 
         default:
-          throw new Error('unhandled drag state type');
+          throw new Error('unhandled drag state payload type');
       }
+
+      const di: DragInfo = {
+        dragId: ds.dragId,
+        payload,
+        dims: ds.dims,
+        offset: ds.offset,
+      };
+      return di;
     } else {
       invariant(matchDragStates.length === 0);
       return undefined;
@@ -202,9 +199,10 @@ const App: React.FC = () => {
             </div>
             <div className="App-drags">
               {state.dragStates.map(ds => {
-                switch (ds.type) {
-                  case 'draggingEV': {
-                    const adjPos = vec2sub(ds.pos, vec2scale(ds.offset, ds.size));
+                const adjPos = vec2sub(ds.pos, ds.offset);
+
+                switch (ds.payload.type) {
+                  case 'ev': {
                     return (
                       <div
                         key={ds.pointerId}
@@ -212,17 +210,16 @@ const App: React.FC = () => {
                           position: 'absolute',
                           left: adjPos.x,
                           top: adjPos.y,
-                          width: `${ds.size}px`,
-                          height: `${ds.size}px`,
+                          width: `${ds.dims.x}px`,
+                          height: `${ds.dims.y}px`,
                         }}
                       >
-                        <PreviewerContainer ev={ds.ev} />
+                        <PreviewerContainer ev={ds.payload.ev} />
                       </div>
                     );
                   }
 
-                  case 'draggingValue': {
-                    const adjPos = vec2sub(ds.pos, ds.offset);
+                  case 'value': {
                     return (
                       <div
                         key={ds.pointerId}
@@ -232,8 +229,8 @@ const App: React.FC = () => {
                           top: adjPos.y,
                         }}
                       >
-                        {ds.node && (
-                          <WrappedDOMNode node={ds.node} />
+                        {ds.payload.previewElem && (
+                          <WrappedDOMNode node={ds.payload.previewElem} />
                         )}
                       </div>
                     );

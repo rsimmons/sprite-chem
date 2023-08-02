@@ -4,35 +4,23 @@ import { EVWrapper } from "./extlib/ev";
 import { arrRemoveElemByValue, arrReplaceElemByValue, genUidRandom, invariant } from "./util";
 import { Vec2 } from "./vec";
 
-export type DragState =
-  {
-    // has not yet "detached"
-    readonly type: 'detachingEV';
-    readonly dragId: string;
-    readonly pointerId: PointerID;
-    readonly ev: EVWrapper<any>;
-    readonly pos: Vec2;
-    readonly size: number;
-    readonly offset: Vec2; // relative to [-0.5, -0.5] to [0.5, 0.5] enclosing square
-    readonly startPos: Vec2;
-  } | {
-    readonly type: 'draggingEV';
-    readonly dragId: string;
-    readonly pointerId: PointerID;
-    readonly ev: EVWrapper<any>;
-    readonly pos: Vec2;
-    readonly size: number;
-    readonly offset: Vec2; // relative to [-0.5, -0.5] to [0.5, 0.5] enclosing square
-  } | {
-    readonly type: 'draggingValue';
-    readonly dragId: string;
-    readonly pointerId: PointerID;
-    readonly typeId: string;
-    readonly value: any;
-    readonly pos: Vec2;
-    readonly node: HTMLElement | undefined;
-    readonly offset: Vec2; // in pixels relative to top left
-  };
+interface DragState {
+  readonly dragId: string;
+  readonly pointerId: PointerID;
+  readonly pos: Vec2; // pointer position
+  readonly offset: Vec2; // subtract this from pos to get the top-left corner of the preview
+  readonly dims: Vec2; // dimensions of the preview
+  readonly payload:
+    {
+      readonly type: 'ev';
+      readonly ev: EVWrapper<any>;
+    } | {
+      readonly type: 'value';
+      readonly typeId: string;
+      readonly value: any;
+      readonly previewElem: HTMLElement;
+    };
+}
 
 export interface AppState {
   readonly singles: ReadonlyMap<string, EVWrapper<any>>;
@@ -62,6 +50,21 @@ export type AppAction =
   } | {
     readonly type: 'toggleRunning';
   } | {
+    readonly type: 'beginDragEV';
+    readonly pointerId: PointerID;
+    readonly ev: EVWrapper<any>;
+    readonly pos: Vec2;
+    readonly offset: Vec2;
+    readonly size: number; // width and height of preview
+  } | {
+    readonly type: 'beginDragValue';
+    readonly pointerId: PointerID;
+    readonly typeId: string;
+    readonly value: any;
+    readonly pos: Vec2;
+    readonly offset: Vec2;
+    readonly previewElem: HTMLElement;
+  } | {
     readonly type: 'pointerMove';
     readonly pointerId: PointerID;
     readonly pos: Vec2;
@@ -69,21 +72,6 @@ export type AppAction =
     readonly type: 'pointerUp';
     readonly pointerId: PointerID;
     readonly pos: Vec2;
-  } | {
-    readonly type: 'pointerDownOnEV';
-    readonly pointerId: PointerID;
-    readonly ev: EVWrapper<any>;
-    readonly pos: Vec2;
-    readonly size: number;
-    readonly offset: Vec2;
-  } | {
-    readonly type: 'pointerDownOnValue';
-    readonly pointerId: PointerID;
-    readonly typeId: string;
-    readonly value: any;
-    readonly pos: Vec2;
-    readonly node: HTMLElement | undefined;
-    readonly offset: Vec2;
   };
 
 export type AppDispatch = React.Dispatch<AppAction>;
@@ -115,60 +103,61 @@ export function reducer(state: AppStateOrLoading, action: AppAction): AppStateOr
       };
     }
 
+    case 'beginDragEV': {
+      return {
+        ...state,
+        dragStates: state.dragStates.concat([{
+          dragId: genUidRandom(),
+          pointerId: action.pointerId,
+          pos: action.pos,
+          offset: action.offset,
+          dims: {x: action.size, y: action.size},
+          payload: {
+            type: 'ev',
+            ev: action.ev,
+          },
+        }]),
+      };
+    }
+
+    case 'beginDragValue': {
+      // measure the dimensions of the preview element
+      const rect = action.previewElem.getBoundingClientRect();
+      const dims = {x: rect.width, y: rect.height};
+
+      return {
+        ...state,
+        dragStates: state.dragStates.concat([{
+          dragId: genUidRandom(),
+          pointerId: action.pointerId,
+          pos: action.pos,
+          offset: action.offset,
+          dims,
+          payload: {
+            type: 'value',
+            typeId: action.typeId,
+            value: action.value,
+            previewElem: action.previewElem,
+          },
+        }]),
+      };
+    }
+
     case 'pointerMove': {
       const ds = findMatchingDragState(action.pointerId);
       if (!ds) {
         return state;
       }
 
-      switch (ds.type) {
-        case 'detachingEV': {
-          const newDs: DragState = ((action.pos.x - ds.startPos.x) > 15) ?
-            {
-              type: 'draggingEV',
-              dragId: ds.dragId,
-              pointerId: ds.pointerId,
-              ev: ds.ev,
-              pos: ds.pos,
-              size: ds.size,
-              offset: ds.offset,
-            } : {
-              ...ds,
-              pos: action.pos,
-            };
+      const newDs: DragState = {
+        ...ds,
+        pos: action.pos,
+      };
 
-          return {
-            ...state,
-            dragStates: arrReplaceElemByValue(state.dragStates, ds, newDs),
-          };
-        }
-
-        case 'draggingEV': {
-          const newDs: DragState = {
-            ...ds,
-            pos: action.pos,
-          };
-
-          return {
-            ...state,
-            dragStates: arrReplaceElemByValue(state.dragStates, ds, newDs),
-          };
-        }
-
-        case 'draggingValue': {
-          const newDs: DragState = {
-            ...ds,
-            pos: action.pos,
-          };
-
-          return {
-            ...state,
-            dragStates: arrReplaceElemByValue(state.dragStates, ds, newDs),
-          };
-        }
-      }
-
-      throw new Error('should be unreachable');
+      return {
+        ...state,
+        dragStates: arrReplaceElemByValue(state.dragStates, ds, newDs),
+      };
     }
 
     case 'pointerUp': {
@@ -180,38 +169,6 @@ export function reducer(state: AppStateOrLoading, action: AppAction): AppStateOr
       return {
         ...state,
         dragStates: arrRemoveElemByValue(state.dragStates, ds),
-      };
-    }
-
-    case 'pointerDownOnEV': {
-      return {
-        ...state,
-        dragStates: state.dragStates.concat([{
-          type: 'detachingEV',
-          dragId: genUidRandom(),
-          pointerId: action.pointerId,
-          ev: action.ev,
-          pos: action.pos,
-          size: action.size,
-          offset: action.offset,
-          startPos: action.pos,
-        }]),
-      };
-    }
-
-    case 'pointerDownOnValue': {
-      return {
-        ...state,
-        dragStates: state.dragStates.concat([{
-          type: 'draggingValue',
-          dragId: genUidRandom(),
-          pointerId: action.pointerId,
-          typeId: action.typeId,
-          value: action.value,
-          pos: action.pos,
-          node: action.node,
-          offset: action.offset,
-        }]),
       };
     }
   }

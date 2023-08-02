@@ -5,6 +5,10 @@ const spriteWorldSetupEmpty: Creator<SpriteWorldSetup, void> = {
   create: () => {
     return {
       instances: new Map(),
+      viewport: {
+        center: {x: 0, y: 0},
+        size: 10,
+      },
     };
   },
 };

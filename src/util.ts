@@ -68,6 +68,15 @@ export function arrRemoveElemByValue<T>(arr: ReadonlyArray<T>, v: T): Array<T> {
   return arr.slice(0, idx).concat(arr.slice(idx+1));
 }
 
+export function arrRemoveElemByValueInPlace<T>(arr: Array<T>, v: T): void {
+  const idx = arr.indexOf(v);
+  if (idx < 0) {
+    throw new Error('did not find value in array');
+  }
+
+  arr.splice(idx, 1);
+}
+
 export function arrReplaceElemByValue<T>(arr: ReadonlyArray<T>, v: T, newV: T): Array<T> {
   const idx = arr.indexOf(v);
   if (idx < 0) {

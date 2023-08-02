@@ -18,7 +18,7 @@ const spriteEditor: Editor<Sprite, undefined> = {
         context.valueChanged(editedValue);
       },
       config: undefined,
-      beginDrag: context.beginDrag,
+      beginDragValue: context.beginDragValue,
       pointerEventTarget: context.pointerEventTarget,
       getPreviewer: context.getPreviewer,
     };

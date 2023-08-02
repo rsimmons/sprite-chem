@@ -1,7 +1,7 @@
 import { EVWrapper } from "../extlib/ev";
 import { Sprite } from "../extensions/types/sprite";
 import { invariant } from "../util";
-import { Vec2 } from "../vec";
+import { STXform, Vec2, applySTXform } from "../vec";
 
 export interface SpriteInstances {
   readonly bitmap: ImageBitmap;
@@ -17,12 +17,29 @@ export interface SpriteInstances {
 }
 
 export interface RenderableState {
-  instances: ReadonlyMap<EVWrapper<Sprite>, SpriteInstances>;
+  readonly instances: ReadonlyMap<EVWrapper<Sprite>, SpriteInstances>;
+  readonly viewport: Viewport;
 }
 
-interface CreateRenderCanvasReturn {
+// the viewport is a square with the given center and size (side length) in world coords
+export interface Viewport {
+  readonly center: Vec2;
+  readonly size: number;
+}
+
+export function getWorldToCanvasXform(viewport: Viewport, canvasWidth: number, canvasHeight: number): STXform {
+  const invSize = 1/viewport.size;
+  const minDim = Math.min(canvasWidth, canvasHeight);
+  return {
+    s: minDim*invSize,
+    tx: canvasWidth*(0.5 - viewport.center.x*invSize),
+    ty: canvasHeight*(0.5 + viewport.center.y*invSize),
+  };
+}
+
+export interface CreateRenderCanvasReturn {
   readonly cleanup: () => void;
-  readonly canvas: HTMLElement;
+  readonly canvas: HTMLCanvasElement;
   readonly pixelScale: number;
 }
 
@@ -58,15 +75,30 @@ export function createRenderCanvas(container: HTMLElement, getState: (t: number,
     ctx.clearRect(0, 0, canvasWidth, canvasHeight);
 
     const state = getState(t, dt);
+
+    const worldCanvasXform = getWorldToCanvasXform(state.viewport, canvasWidth, canvasHeight);
+
     state.instances.forEach((insts, spriteEV) => {
       for (const inst of insts.instances) {
         const width = inst.size*insts.scaledWidth;
         const height = inst.size*insts.scaledHeight;
-        const left = inst.pos.x - 0.5*width;
-        const top = inst.pos.y - 0.5*height;
-        ctx.drawImage(insts.bitmap, left, top, width, height);
+        const worldTopLeft = {x: inst.pos.x - 0.5*width, y: inst.pos.y - 0.5*height};
+        // TODO: I think we could use the builtin canvas transform here instead of doing the math ourselves
+        const canvasTopLeft = applySTXform(worldCanvasXform, worldTopLeft);
+        ctx.drawImage(insts.bitmap, canvasTopLeft.x, canvasTopLeft.y, worldCanvasXform.s*width, worldCanvasXform.s*height);
       }
     });
+
+    ctx.fillStyle = '#000000';
+    if (canvasHeight > canvasWidth) {
+      const barSize = 0.5*(canvasHeight - canvasWidth);
+      ctx.fillRect(0, 0, canvasWidth, barSize);
+      ctx.fillRect(0, canvasHeight - barSize, canvasWidth, barSize);
+    } else if (canvasWidth > canvasHeight) {
+      const barSize = 0.5*(canvasWidth - canvasHeight);
+      ctx.fillRect(0, 0, barSize, canvasHeight);
+      ctx.fillRect(canvasWidth - barSize, 0, barSize, canvasHeight);
+    }
 
     // sanity check that we have canvas dims correct
     ctx.fillRect(canvasWidth-15, canvasHeight-15, 10, 10);
