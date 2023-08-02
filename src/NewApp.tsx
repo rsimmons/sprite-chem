@@ -38,6 +38,10 @@ const App: React.FC = () => {
   });
 
   const handlePointerMoveUp = (e: PointerEvent, type: 'pointerMove'|'pointerUp') => {
+    if (state === 'loading') {
+      return;
+    }
+
     const pos = {
       x: e.clientX,
       y: e.clientY,
