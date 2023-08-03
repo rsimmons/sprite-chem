@@ -148,6 +148,7 @@ const spriteWorldSetupEditor: Editor<SpriteWorldSetup, undefined> = {
       const di = ed.dragInfo;
       if (di) {
         const addInstance = (spriteEV: EVWrapper<Sprite>, worldCenter: {x: number, y: number}, worldSize: number): void => {
+          console.log('adding instance');
           if (!editedValue.instances.has(spriteEV)) {
             editedValue.instances.set(spriteEV, []);
             const info: CachedSpriteInfo = {
@@ -166,21 +167,29 @@ const spriteWorldSetupEditor: Editor<SpriteWorldSetup, undefined> = {
           context.valueChanged(editedValue);
         };
 
-        const rect = canvas.getBoundingClientRect();
-        const canvasCenter = { // center in canvas coords
-          x: pixelScale*(ed.pos.x - rect.left - di.offset.x + 0.5*di.dims.x),
-          y: pixelScale*(ed.pos.y - rect.top - di.offset.y + 0.5*di.dims.y),
-        };
         const worldCanvasXform = getWorldToCanvasXform(editedValue.viewport, canvas.width, canvas.height);
-        const worldCenter = applyInvSTXform(worldCanvasXform, canvasCenter);
+        const rect = canvas.getBoundingClientRect();
+        const canvasPointerPos = {x: pixelScale*(ed.pos.x - rect.left), y: pixelScale*(ed.pos.y - rect.top)};
+        const worldPointerPos = applyInvSTXform(worldCanvasXform, canvasPointerPos);
+        if ((worldPointerPos.x > (editedValue.viewport.center.x - 0.5*editedValue.viewport.size)) &&
+            (worldPointerPos.x < (editedValue.viewport.center.x + 0.5*editedValue.viewport.size)) &&
+            (worldPointerPos.y > (editedValue.viewport.center.y - 0.5*editedValue.viewport.size)) &&
+            (worldPointerPos.y < (editedValue.viewport.center.y + 0.5*editedValue.viewport.size))) {
+          const canvasCenter = { // center in canvas coords
+            x: pixelScale*(ed.pos.x - rect.left - di.offset.x + 0.5*di.dims.x),
+            y: pixelScale*(ed.pos.y - rect.top - di.offset.y + 0.5*di.dims.y),
+          };
+          const worldCenter = applyInvSTXform(worldCanvasXform, canvasCenter);
 
-        if ((di.payload.type === 'ev') && (di.payload.ev.typeId === 'sprite')) {
-          const spriteEV = di.payload.ev as EVWrapper<Sprite>;
+          if ((di.payload.type === 'ev') && (di.payload.ev.typeId === 'sprite')) {
+            const spriteEV = di.payload.ev as EVWrapper<Sprite>;
 
-          addInstance(spriteEV, worldCenter, 3); //pixelScale*Math.max(di.dims.x, di.dims.y)/worldCanvasXform.s);
-        } else if ((di.payload.type === 'value') && (di.payload.typeId === 'spriteWorldSetupEditor/instance')) {
-          const val = di.payload.value as DraggedInstanceData;
-          addInstance(val.spriteEV, worldCenter, val.size);
+            // to match size of drag, size can be: pixelScale*Math.max(di.dims.x, di.dims.y)/worldCanvasXform.s
+            addInstance(spriteEV, worldCenter, 1);
+          } else if ((di.payload.type === 'value') && (di.payload.typeId === 'spriteWorldSetupEditor/instance')) {
+            const val = di.payload.value as DraggedInstanceData;
+            addInstance(val.spriteEV, worldCenter, val.size);
+          }
         }
       }
     };
