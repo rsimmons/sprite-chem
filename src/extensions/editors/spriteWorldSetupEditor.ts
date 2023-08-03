@@ -148,7 +148,6 @@ const spriteWorldSetupEditor: Editor<SpriteWorldSetup, undefined> = {
       const di = ed.dragInfo;
       if (di) {
         const addInstance = (spriteEV: EVWrapper<Sprite>, worldCenter: {x: number, y: number}, worldSize: number): void => {
-          console.log('adding instance');
           if (!editedValue.instances.has(spriteEV)) {
             editedValue.instances.set(spriteEV, []);
             const info: CachedSpriteInfo = {
