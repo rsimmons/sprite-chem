@@ -209,7 +209,7 @@ const App: React.FC = () => {
                   case 'ev': {
                     return (
                       <div
-                        key={ds.pointerId}
+                        key={ds.dragId}
                         style={{
                           position: 'absolute',
                           left: adjPos.x,
@@ -226,7 +226,7 @@ const App: React.FC = () => {
                   case 'value': {
                     return (
                       <div
-                        key={ds.pointerId}
+                        key={ds.dragId}
                         style={{
                           position: 'absolute',
                           left: adjPos.x,

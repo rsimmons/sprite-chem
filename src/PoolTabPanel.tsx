@@ -1,11 +1,18 @@
-import { ReactElement, useState } from 'react';
+import { ReactElement, useRef, useState } from 'react';
 import PreviewerContainer from './PreviewerContainer';
 import { ClientXY, getObjId, invariant } from './util';
 import { AppDispatch, AppState } from './newState';
 import './PoolTabPanel.css';
-import { Vec2 } from './vec';
+import { Vec2, vec2dist } from './vec';
 import EditorContainer from './EditorContainer';
 import { EVWrapper } from './extlib/ev';
+import { DragTracker } from './extshared/dragTracker';
+
+interface DragObj {
+  readonly ev: EVWrapper<any>;
+  readonly size: number;
+  readonly offset: Vec2;
+}
 
 const PoolTabPanel: React.FC<{
   readonly globalId: string;
@@ -13,17 +20,16 @@ const PoolTabPanel: React.FC<{
   readonly dispatch: AppDispatch;
   readonly pointerEventTarget: EventTarget;
 }> = ({globalId, state, dispatch, pointerEventTarget}) => {
+  const dragTracker = useRef<DragTracker<DragObj>>(new DragTracker());
+
   const handlePointerDown = (e: React.PointerEvent, ev: EVWrapper<any>) => {
     e.preventDefault();
 
-    // release capture if we implicitly got it (happens with touch by default)
     if (!(e.target instanceof HTMLElement)) {
       throw new Error('unclear if this can happen');
     }
 
-    if (e.target.hasPointerCapture(e.pointerId)) {
-      e.target.releasePointerCapture(e.pointerId);
-    }
+    e.target.setPointerCapture(e.pointerId);
 
     // find the nearest ancestor that's the container, for calculating offset
     let containerElem = e.target;
@@ -44,23 +50,44 @@ const PoolTabPanel: React.FC<{
       y: e.clientY - rect.top,
     };
 
-    dispatch({
-      type: 'beginDragEV',
-      pointerId: e.pointerId,
+    dragTracker.current.pointerDown(e.nativeEvent, {
       ev,
-      pos: {
-        x: e.clientX,
-        y: e.clientY,
-      },
       size: maxDim,
       offset,
     });
   };
 
-  const handleClick = (e: React.MouseEvent, ev: EVWrapper<any>) => {
+  const handlePointerMove = (e: React.PointerEvent) => {
     e.preventDefault();
 
-    setSelectedEV(ev);
+    const di = dragTracker.current.pointerMove(e.nativeEvent);
+    if (di) {
+      if ((di.pos.x - di.startPos.x) > 10) {
+        dispatch({
+          type: 'beginDragEV',
+          pointerId: e.pointerId,
+          ev: di.obj.ev,
+          pos: {
+            x: di.pos.x,
+            y: di.pos.y,
+          },
+          size: di.obj.size,
+          offset: di.obj.offset,
+        });
+        dragTracker.current.stopTracking(e.pointerId);
+      }
+    }
+  };
+
+  const handlePointerUp = (e: React.PointerEvent) => {
+    e.preventDefault();
+
+    const di = dragTracker.current.pointerUp(e.nativeEvent);
+    if (di) {
+      if (vec2dist(di.pos, di.startPos) < 10) {
+        setSelectedEV(di.obj.ev);
+      }
+    }
   };
 
   const poolEVs = state.pools.get(globalId);
@@ -76,7 +103,8 @@ const PoolTabPanel: React.FC<{
             key={getObjId(ev)}
             className={`PoolTabPanel-preview-container ${selectedEV === ev ? 'PoolTabPanel-preview-container-selected' : ''}`}
             onPointerDown={e => handlePointerDown(e, ev)}
-            onClick={e => handleClick(e, ev)}
+            onPointerMove={handlePointerMove}
+            onPointerUp={handlePointerUp}
           >
             <PreviewerContainer ev={ev} />
           </div>

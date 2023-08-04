@@ -2,7 +2,7 @@ import { EVWrapper } from "./ev";
 import { Previewer } from "./previewer";
 import { EVTypeId } from "./type";
 
-export type PointerID = 'mouse' | number;
+export type PointerID = number;
 
 export type DragPayload =
   {
