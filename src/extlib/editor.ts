@@ -15,9 +15,9 @@ export type DragPayload =
   };
 
 export interface PointerEventData {
-  pointerId: PointerID;
-  pos: {x: number, y: number};
-  dragInfo: DragInfo | undefined;
+  readonly pointerId: PointerID;
+  readonly pos: {x: number, y: number};
+  readonly dragInfo: DragInfo;
 }
 
 export interface DragInfo {
@@ -25,6 +25,14 @@ export interface DragInfo {
   readonly payload: DragPayload;
   readonly dims: {x: number, y: number};
   readonly offset: {x: number, y: number};
+}
+
+export interface BeginDragEVArgs {
+  readonly pointerId: PointerID;
+  readonly ev: EVWrapper<any>;
+  readonly pos: {x: number, y: number};
+  readonly offset: {x: number, y: number};
+  readonly size: number;
 }
 
 export interface BeginDragValueArgs {

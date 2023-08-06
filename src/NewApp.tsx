@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 
 import PoolTabPanel from './PoolTabPanel';
-import { DragInfo, PointerEventData, PointerID } from './extlib/editor';
+import { BeginDragEVArgs, BeginDragValueArgs, DragInfo, PointerEventData, PointerID } from './extlib/editor';
 import { ClientXY, invariant } from './util';
 import { AppAction, AppStateOrLoading, createInitState, reducer } from './newState';
 import EditorContainer from './EditorContainer';
@@ -26,8 +26,6 @@ const App: React.FC = () => {
   const [stateRef, dispatch] = useEffectfulReducer<AppStateOrLoading, AppAction>(reducer, () => 'loading');
   const state = stateRef.current;
 
-  const pointerEventTarget = useRef(new EventTarget());
-
   useRunOnce(() => {
     (async () => {
       dispatch({
@@ -37,7 +35,35 @@ const App: React.FC = () => {
     })();
   });
 
-  const handlePointerMoveUp = (e: PointerEvent, type: 'pointerMove'|'pointerUp') => {
+  const handleBeginDragValue = (args: BeginDragValueArgs) => {
+    dispatch({
+      type: 'beginDragValue',
+      ...args,
+    });
+  };
+
+  const handleBeginDragEV = (args: BeginDragEVArgs) => {
+    dispatch({
+      type: 'beginDragEV',
+      ...args,
+    });
+  };
+
+  const pointerEventTarget = useRef(new EventTarget());
+  const dispatchDragEvent  = (type: 'dragMove' | 'dragDrop', pointerId: number, pos: Vec2, dragInfo: DragInfo): boolean => {
+    const ed: PointerEventData = {
+      pointerId: pointerId,
+      pos,
+      dragInfo,
+    };
+    const pe = new CustomEvent(type, {
+      detail: ed,
+      cancelable: true,
+    });
+    return pointerEventTarget.current.dispatchEvent(pe);
+  };
+
+  const handlePointerMove = (e: PointerEvent) => {
     if (state === 'loading') {
       return;
     }
@@ -47,29 +73,48 @@ const App: React.FC = () => {
       y: e.clientY,
     };
 
-    // dispatch an event on the target that we pass to child components
-    // so as to notify extensions
-    const ed: PointerEventData = {
+    dispatch({
+      type: 'pointerMove',
       pointerId: e.pointerId,
       pos,
-      dragInfo: createDragInfo(e.pointerId),
-    };
-    const pe = new CustomEvent(type, {
-      detail: ed,
     });
-    pointerEventTarget.current.dispatchEvent(pe);
+
+    // TODO: This dragInfo is actually created off of the old state,
+    // i.e. the dispatch above hasn't been applied yet.
+    const dragInfo = createDragInfo(e.pointerId);
+    if (dragInfo) {
+      const accepted = !dispatchDragEvent('dragMove', e.pointerId, pos, dragInfo);
+      if (accepted) {
+        dispatch({
+          type: 'acceptDrag',
+          pointerId: e.pointerId,
+        });
+      }
+    }
+  };
+
+  const handlePointerUp = (e: PointerEvent) => {
+    if (state === 'loading') {
+      return;
+    }
+
+    const pos = {
+      x: e.clientX,
+      y: e.clientY,
+    };
 
     dispatch({
-      type,
+      type: 'pointerUp',
       pointerId: e.pointerId,
       pos,
     });
-  }
-  const handlePointerMove = (e: PointerEvent) => {
-    handlePointerMoveUp(e, 'pointerMove');
-  };
-  const handlePointerUp = (e: PointerEvent) => {
-    handlePointerMoveUp(e, 'pointerUp');
+
+    // TODO: This dragInfo is actually created off of the old state,
+    // i.e. the dispatch above hasn't been applied yet.
+    const dragInfo = createDragInfo(e.pointerId);
+    if (dragInfo) {
+      dispatchDragEvent('dragDrop', e.pointerId, pos, dragInfo);
+    }
   };
 
   const createDragInfo = (pointerId: PointerID): DragInfo | undefined => {
@@ -174,8 +219,9 @@ const App: React.FC = () => {
                             <PoolTabPanel
                               globalId={pool.globalId}
                               state={state}
-                              dispatch={dispatch}
                               pointerEventTarget={pointerEventTarget.current}
+                              onBeginDragEV={handleBeginDragEV}
+                              onBeginDragValue={handleBeginDragValue}
                             />
                           );
                         }
@@ -196,8 +242,13 @@ const App: React.FC = () => {
               ) : (
                 <EditorContainer
                   ev={stoppedEditorEV}
-                  dispatch={dispatch}
                   pointerEventTarget={pointerEventTarget.current}
+                  onBeginDragValue={(args) => {
+                    dispatch({
+                      type: 'beginDragValue',
+                      ...args,
+                    });
+                  }}
                 />
               )}
             </div>
@@ -205,10 +256,13 @@ const App: React.FC = () => {
               {state.dragStates.map(ds => {
                 const adjPos = vec2sub(ds.pos, ds.offset);
 
+                const className = 'App-drag ' + (ds.accepted ? 'App-drag-accepted' : 'App-drag-rejected');
+
                 switch (ds.payload.type) {
                   case 'ev': {
                     return (
                       <div
+                        className={className}
                         key={ds.dragId}
                         style={{
                           position: 'absolute',
@@ -226,6 +280,7 @@ const App: React.FC = () => {
                   case 'value': {
                     return (
                       <div
+                        className={className}
                         key={ds.dragId}
                         style={{
                           position: 'absolute',

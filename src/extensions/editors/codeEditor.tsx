@@ -888,7 +888,7 @@ const CodeEditor: React.FC<{editorCtx: EditorContext<Code, undefined>}> = ({edit
     },
   ];
 
-  const handlePointerMove = (e: Event) => {
+  const handleDragMove = (e: Event) => {
     const ed = (e as CustomEvent<PointerEventData>).detail;
     invariant(ed);
 
@@ -912,9 +912,6 @@ const CodeEditor: React.FC<{editorCtx: EditorContext<Code, undefined>}> = ({edit
     };
 
     const di = ed.dragInfo;
-    if (!di) {
-      return;
-    }
 
     let potentialNode: ASTNode | undefined = undefined;
     if ((di.payload.type === 'value') && (di.payload.typeId === 'codeEditor/node')) {
@@ -1008,6 +1005,7 @@ const CodeEditor: React.FC<{editorCtx: EditorContext<Code, undefined>}> = ({edit
           potentialNode,
           dropLoc: nearestDropLoc,
         });
+        e.preventDefault(); // indicate drag acceptance
       } else {
         dispatch({
           type: 'removePotentialDrop',
@@ -1023,15 +1021,11 @@ const CodeEditor: React.FC<{editorCtx: EditorContext<Code, undefined>}> = ({edit
     }
   };
 
-  const handlePointerUp = (e: Event) => {
+  const handleDragDrop = (e: Event) => {
     const ed = (e as CustomEvent<PointerEventData>).detail;
     invariant(ed);
 
-    const di = ed.dragInfo
-    if (!di) {
-      return;
-    }
-
+    const di = ed.dragInfo;
     dispatch({
       type: 'endDrag',
       dragId: di.dragId,
@@ -1039,13 +1033,13 @@ const CodeEditor: React.FC<{editorCtx: EditorContext<Code, undefined>}> = ({edit
   };
 
   useEffect(() => {
-    editorCtx.pointerEventTarget.addEventListener('pointerMove', handlePointerMove);
-    editorCtx.pointerEventTarget.addEventListener('pointerUp', handlePointerUp);
+    editorCtx.pointerEventTarget.addEventListener('dragMove', handleDragMove);
+    editorCtx.pointerEventTarget.addEventListener('dragDrop', handleDragDrop);
     return () => {
-      editorCtx.pointerEventTarget.removeEventListener('pointerMove', handlePointerMove);
-      editorCtx.pointerEventTarget.removeEventListener('pointerUp', handlePointerUp);
+      editorCtx.pointerEventTarget.removeEventListener('dragMove', handleDragMove);
+      editorCtx.pointerEventTarget.removeEventListener('dragDrop', handleDragDrop);
     };
-  }, [handlePointerMove, handlePointerUp]);
+  }, [handleDragMove, handleDragDrop]);
 
   return (
     <div

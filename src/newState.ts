@@ -20,6 +20,7 @@ interface DragState {
       readonly value: any;
       readonly previewElem: HTMLElement;
     };
+  readonly accepted: boolean; // will a drop here be accepted by something?
 }
 
 export interface AppState {
@@ -73,6 +74,9 @@ export type AppAction =
     readonly type: 'pointerUp';
     readonly pointerId: PointerID;
     readonly pos: Vec2;
+  } | {
+    readonly type: 'acceptDrag';
+    readonly pointerId: PointerID;
   };
 
 export type AppDispatch = React.Dispatch<AppAction>;
@@ -117,6 +121,7 @@ export function reducer(state: AppStateOrLoading, action: AppAction): AppStateOr
             type: 'ev',
             ev: action.ev,
           },
+          accepted: false,
         }]),
       };
     }
@@ -136,6 +141,7 @@ export function reducer(state: AppStateOrLoading, action: AppAction): AppStateOr
             value: action.value,
             previewElem: action.previewElem,
           },
+          accepted: false,
         }]),
       };
     }
@@ -149,6 +155,7 @@ export function reducer(state: AppStateOrLoading, action: AppAction): AppStateOr
       const newDs: DragState = {
         ...ds,
         pos: action.pos,
+        accepted: false,
       };
 
       return {
@@ -166,6 +173,23 @@ export function reducer(state: AppStateOrLoading, action: AppAction): AppStateOr
       return {
         ...state,
         dragStates: arrRemoveElemByValue(state.dragStates, ds),
+      };
+    }
+
+    case 'acceptDrag': {
+      const ds = findMatchingDragState(action.pointerId);
+      if (!ds) {
+        return state;
+      }
+
+      const newDs: DragState = {
+        ...ds,
+        accepted: true,
+      };
+
+      return {
+        ...state,
+        dragStates: arrReplaceElemByValue(state.dragStates, ds, newDs),
       };
     }
   }

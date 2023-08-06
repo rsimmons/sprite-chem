@@ -4,7 +4,7 @@ import { SpriteInstance, SpriteWorldSetup } from '../types/spriteWorldSetup';
 import { createRenderCanvas, getWorldToCanvasXform, SpriteInstances } from '../../extshared/spriteWorld';
 import { arrRemoveElemByValueInPlace, invariant } from '../../util';
 import { EVWrapper } from '../../extlib/ev';
-import { applyInvSTXform, applySTXform } from '../../vec';
+import { Vec2, applyInvSTXform, applySTXform } from '../../vec';
 
 interface DraggedInstanceData {
   readonly spriteEV: EVWrapper<Sprite>;
@@ -141,65 +141,93 @@ const spriteWorldSetupEditor: Editor<SpriteWorldSetup, undefined> = {
       }
     };
 
-    const handlePointerUp = (e: Event) => {
+    // returns undefined if not over viewport
+    const dragToWorldCenter = (ed: PointerEventData): Vec2 | undefined => {
+      const di = ed.dragInfo;
+      invariant(di);
+
+      const worldCanvasXform = getWorldToCanvasXform(editedValue.viewport, canvas.width, canvas.height);
+      const rect = canvas.getBoundingClientRect();
+      const canvasPointerPos = {x: pixelScale*(ed.pos.x - rect.left), y: pixelScale*(ed.pos.y - rect.top)};
+      const worldPointerPos = applyInvSTXform(worldCanvasXform, canvasPointerPos);
+      if ((worldPointerPos.x > (editedValue.viewport.center.x - 0.5*editedValue.viewport.size)) &&
+          (worldPointerPos.x < (editedValue.viewport.center.x + 0.5*editedValue.viewport.size)) &&
+          (worldPointerPos.y > (editedValue.viewport.center.y - 0.5*editedValue.viewport.size)) &&
+          (worldPointerPos.y < (editedValue.viewport.center.y + 0.5*editedValue.viewport.size))) {
+        const canvasCenter = { // center in canvas coords
+          x: pixelScale*(ed.pos.x - rect.left - di.offset.x + 0.5*di.dims.x),
+          y: pixelScale*(ed.pos.y - rect.top - di.offset.y + 0.5*di.dims.y),
+        };
+        const worldCenter = applyInvSTXform(worldCanvasXform, canvasCenter);
+        return worldCenter;
+      } else {
+        return undefined;
+      }
+    };
+
+    const handleDrag = (e: Event, drop: boolean) => {
       const ed = (e as CustomEvent<PointerEventData>).detail;
       invariant(ed);
 
       const di = ed.dragInfo;
-      if (di) {
-        const addInstance = (spriteEV: EVWrapper<Sprite>, worldCenter: {x: number, y: number}, worldSize: number): void => {
-          if (!editedValue.instances.has(spriteEV)) {
-            editedValue.instances.set(spriteEV, []);
-            const info: CachedSpriteInfo = {
-              sprite: spriteEV.value,
-              bitmapInfo: getBitmapInfo(spriteEV.value.imageBitmap),
-            };
-            cachedSpriteInfo.set(spriteEV, info);
-          }
-
-          const insts = editedValue.instances.get(spriteEV)!;
-          insts.push({
-            pos: worldCenter,
-            size: worldSize,
-          });
-
-          context.valueChanged(editedValue);
-        };
-
-        const worldCanvasXform = getWorldToCanvasXform(editedValue.viewport, canvas.width, canvas.height);
-        const rect = canvas.getBoundingClientRect();
-        const canvasPointerPos = {x: pixelScale*(ed.pos.x - rect.left), y: pixelScale*(ed.pos.y - rect.top)};
-        const worldPointerPos = applyInvSTXform(worldCanvasXform, canvasPointerPos);
-        if ((worldPointerPos.x > (editedValue.viewport.center.x - 0.5*editedValue.viewport.size)) &&
-            (worldPointerPos.x < (editedValue.viewport.center.x + 0.5*editedValue.viewport.size)) &&
-            (worldPointerPos.y > (editedValue.viewport.center.y - 0.5*editedValue.viewport.size)) &&
-            (worldPointerPos.y < (editedValue.viewport.center.y + 0.5*editedValue.viewport.size))) {
-          const canvasCenter = { // center in canvas coords
-            x: pixelScale*(ed.pos.x - rect.left - di.offset.x + 0.5*di.dims.x),
-            y: pixelScale*(ed.pos.y - rect.top - di.offset.y + 0.5*di.dims.y),
+      const addInstance = (spriteEV: EVWrapper<Sprite>, worldCenter: {x: number, y: number}, worldSize: number): void => {
+        if (!editedValue.instances.has(spriteEV)) {
+          editedValue.instances.set(spriteEV, []);
+          const info: CachedSpriteInfo = {
+            sprite: spriteEV.value,
+            bitmapInfo: getBitmapInfo(spriteEV.value.imageBitmap),
           };
-          const worldCenter = applyInvSTXform(worldCanvasXform, canvasCenter);
+          cachedSpriteInfo.set(spriteEV, info);
+        }
 
-          if ((di.payload.type === 'ev') && (di.payload.ev.typeId === 'sprite')) {
-            const spriteEV = di.payload.ev as EVWrapper<Sprite>;
+        const insts = editedValue.instances.get(spriteEV)!;
+        insts.push({
+          pos: worldCenter,
+          size: worldSize,
+        });
 
+        context.valueChanged(editedValue);
+      };
+
+      const worldCenter = dragToWorldCenter(ed);
+      if (worldCenter) {
+        if ((di.payload.type === 'ev') && (di.payload.ev.typeId === 'sprite')) {
+          const spriteEV = di.payload.ev as EVWrapper<Sprite>;
+
+          if (drop) {
             // to match size of drag, size can be: pixelScale*Math.max(di.dims.x, di.dims.y)/worldCanvasXform.s
             addInstance(spriteEV, worldCenter, 1);
-          } else if ((di.payload.type === 'value') && (di.payload.typeId === 'spriteWorldSetupEditor/instance')) {
-            const val = di.payload.value as DraggedInstanceData;
+          } else {
+            e.preventDefault(); // indicate acceptance
+          }
+        } else if ((di.payload.type === 'value') && (di.payload.typeId === 'spriteWorldSetupEditor/instance')) {
+          const val = di.payload.value as DraggedInstanceData;
+          if (drop) {
             addInstance(val.spriteEV, worldCenter, val.size);
+          } else {
+            e.preventDefault(); // indicate acceptance
           }
         }
       }
     };
 
+    const handleDragMove = (e: Event) => {
+      handleDrag(e, false);
+    };
+
+    const handleDragDrop = (e: Event) => {
+      handleDrag(e, true);
+    };
+
     canvas.addEventListener('pointerdown', handlePointerDown);
-    context.pointerEventTarget.addEventListener('pointerUp', handlePointerUp);
+    context.pointerEventTarget.addEventListener('dragMove', handleDragMove);
+    context.pointerEventTarget.addEventListener('dragDrop', handleDragDrop);
 
     return {
       cleanup: () => {
         canvas.removeEventListener('pointerdown', handlePointerDown);
-        context.pointerEventTarget.removeEventListener('pointerUp', handlePointerUp);
+        context.pointerEventTarget.removeEventListener('dragMove', handleDragMove);
+        context.pointerEventTarget.removeEventListener('dragDrop', handleDragDrop);
         cleanup();
       },
     };

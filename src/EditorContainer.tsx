@@ -1,20 +1,21 @@
 import { useEffect, useRef } from 'react';
 import { invariant } from './util';
 import { TEMPLATE } from './config';
-import { Editor, EditorReturn, PointerID } from './extlib/editor';
+import { BeginDragValueArgs, Editor, EditorReturn, PointerID } from './extlib/editor';
 import { AppDispatch } from './newState';
 import { useConstant } from './utilReact';
 import './EditorContainer.css';
 import { EVWrapper } from './extlib/ev';
 import { EVTypeId } from './extlib/type';
+import { Vec2 } from './vec';
 
 const EditorContainer: React.FC<{
   readonly ev: EVWrapper<any>;
-  readonly dispatch: AppDispatch;
   readonly pointerEventTarget: EventTarget;
-}> = ({ev, dispatch, pointerEventTarget}) => {
+  readonly onBeginDragValue: (args: BeginDragValueArgs) => void;
+}> = ({ev, onBeginDragValue, pointerEventTarget}) => {
   useConstant(ev);
-  useConstant(dispatch);
+  // TODO: useConstant(onBeginDragValue), etc?
 
   const containerRef = useRef<HTMLDivElement>(null);
   const editorReturnRef = useRef<EditorReturn<any> | null>(null);
@@ -39,17 +40,7 @@ const EditorContainer: React.FC<{
         ev.setValue(newValue);
       },
       beginDragValue: (args) => {
-        const {pointerId, typeId, value, pos, offset, dims, previewElem} = args;
-        dispatch({
-          type: 'beginDragValue',
-          pointerId,
-          typeId,
-          value,
-          pos,
-          offset,
-          dims,
-          previewElem,
-        });
+        onBeginDragValue(args);
       },
       pointerEventTarget,
       getPreviewer: (typeId) => {

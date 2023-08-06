@@ -81,3 +81,23 @@
 .App-drags {
   cursor: grabbing;
 }
+
+.App-drag::after {
+  position: absolute;
+  content: '';
+  top: -5%;
+  left: -5%;
+  width: 110%;
+  height: 110%;
+  opacity: 0.25;
+  border-radius: 1em;
+}
+
+.App-drag-accepted::after {
+  background: rgba(0, 255, 0, 1);
+  opacity: 0.25;
+}
+
+.App-drag-rejected::after {
+  background: rgba(255, 0, 0, 1);
+}

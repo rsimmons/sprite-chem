@@ -7,6 +7,7 @@ import { Vec2, vec2dist } from './vec';
 import EditorContainer from './EditorContainer';
 import { EVWrapper } from './extlib/ev';
 import { DragTracker } from './extshared/dragTracker';
+import { BeginDragEVArgs, BeginDragValueArgs } from './extlib/editor';
 
 interface DragObj {
   readonly ev: EVWrapper<any>;
@@ -17,9 +18,10 @@ interface DragObj {
 const PoolTabPanel: React.FC<{
   readonly globalId: string;
   readonly state: AppState;
-  readonly dispatch: AppDispatch;
   readonly pointerEventTarget: EventTarget;
-}> = ({globalId, state, dispatch, pointerEventTarget}) => {
+  readonly onBeginDragEV: (args: BeginDragEVArgs) => void;
+  readonly onBeginDragValue: (args: BeginDragValueArgs) => void;
+}> = ({globalId, state, pointerEventTarget, onBeginDragEV, onBeginDragValue}) => {
   const dragTracker = useRef<DragTracker<DragObj>>(new DragTracker());
 
   const handlePointerDown = (e: React.PointerEvent, ev: EVWrapper<any>) => {
@@ -63,8 +65,7 @@ const PoolTabPanel: React.FC<{
     const di = dragTracker.current.pointerMove(e.nativeEvent);
     if (di) {
       if ((di.pos.x - di.startPos.x) > 10) {
-        dispatch({
-          type: 'beginDragEV',
+        onBeginDragEV({
           pointerId: e.pointerId,
           ev: di.obj.ev,
           pos: {
@@ -116,8 +117,8 @@ const PoolTabPanel: React.FC<{
           <EditorContainer
             key={getObjId(selectedEV)}
             ev={selectedEV}
-            dispatch={dispatch}
             pointerEventTarget={pointerEventTarget}
+            onBeginDragValue={onBeginDragValue}
           />
         )}
       </div>
