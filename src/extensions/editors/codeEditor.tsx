@@ -3,7 +3,7 @@ import ReactDOM from 'react-dom/client';
 import { Editor, EditorContext, DragInfo, DragPayload, PointerEventData } from '../../extlib/editor';
 import { genUidRandom, insertIntoArray, invariant } from '../../util';
 import { Vec2, vec2dist, vec2sub } from '../../vec';
-import { ASTNode, Code, DeclNode, EqNode, FnAppNode, HoleNode, isBindExprNode, isDeclNode, isProgramNode, isValueExprNode, LiteralNode, Name, NodeId, ProgramNode, ValueExprNode, VarNameNode, VarRefNode } from '../types/code';
+import { ASTNode, Code, DeclNode, EmitNode, EqNode, FnAppNode, HoleNode, isBindExprNode, isDeclNode, isMutTargetNode, isProgramNode, isStmtNode, isValueExprNode, isVarRefNode, LiteralNode, Name, NodeId, ProgramNode, StmtNode, ValueExprNode, VarNameNode, VarRefNode, WhenNode } from '../types/code';
 import './codeEditor.css';
 import { EVWrapper } from '../../extlib/ev';
 import { Previewer, PreviewerReturn } from '../../extlib/previewer';
@@ -83,8 +83,20 @@ function transformChildren<N extends ASTNode, X>(node: N, transform: (node: ASTN
       }
     }
 
-    case 'When':
-      throw new Error('unimplemented');
+    case 'When': {
+      const newEvts = xChild(node.evts, isValueExprNode);
+      const newStmts = xChildArr(node.stmts, isStmtNode);
+
+      if ((newEvts === node.evts) && (newStmts === node.stmts)) {
+        return node;
+      } else {
+        return {
+          ...node,
+          evts: newEvts,
+          stmts: newStmts,
+        };
+      }
+    }
 
     case 'Eq': {
       const newLHS = xChild(node.lhs, isBindExprNode);
@@ -101,8 +113,20 @@ function transformChildren<N extends ASTNode, X>(node: N, transform: (node: ASTN
       }
     }
 
-    case 'Emit':
-      throw new Error('unimplemented');
+    case 'Emit': {
+      const newEvts = xChild(node.evts, isMutTargetNode);
+      const newExpr = xChild(node.expr, isValueExprNode);
+
+      if ((newEvts === node.evts) && (newExpr === node.expr)) {
+        return node;
+      } else {
+        return {
+          ...node,
+          evts: newEvts,
+          expr: newExpr,
+        };
+      }
+    }
 
     case 'Program': {
       const newDecls = xChildArr(node.decls, isDeclNode);
@@ -198,6 +222,7 @@ type Type =
   | {type: 'Num'}
   | {type: 'Vec2'}
   | {type: 'EV', typeId: string}
+  | {type: 'UnitEvent'} // for now
   ;
 
 interface Analysis {
@@ -517,6 +542,36 @@ const EqView: React.FC<{node: EqNode, ctx: NodeViewCtx, isListItem: boolean, all
   );
 };
 
+const WhenView: React.FC<{node: WhenNode, ctx: NodeViewCtx, isListItem: boolean, allowed: string}> = ({node, ctx, isListItem, allowed}) => {
+  const childCtx = {...ctx, allowDrag: (ctx.allowDrag === 'no-children') ? 'no' : ctx.allowDrag};
+
+  return (
+    <Block node={node} ctx={ctx} style="decl" isListItem={isListItem} allowed={allowed}>
+      <BlockLine>
+        <BlockLineText text="when" />
+        <NodeView node={node.evts} ctx={childCtx} isListItem={false} allowed="value" />
+        {/* <NodeView node={node.rhs} ctx={childCtx} isListItem={false} allowed="value" /> */}
+      </BlockLine>
+      <StmtListView stmts={node.stmts} parentNode={node} ctx={childCtx} />
+    </Block>
+  );
+};
+
+const EmitView: React.FC<{node: EmitNode, ctx: NodeViewCtx, isListItem: boolean, allowed: string}> = ({node, ctx, isListItem, allowed}) => {
+  const childCtx = {...ctx, allowDrag: (ctx.allowDrag === 'no-children') ? 'no' : ctx.allowDrag};
+
+  return (
+    <Block node={node} ctx={ctx} style="stmt" isListItem={isListItem} allowed={allowed}>
+      <BlockLine>
+        <BlockLineText text="emit on" />
+        <NodeView node={node.evts} ctx={childCtx} isListItem={false} allowed="bind" />
+        <BlockLineText text="value" />
+        <NodeView node={node.expr} ctx={childCtx} isListItem={false} allowed="value" />
+      </BlockLine>
+    </Block>
+  );
+}
+
 const ProgramView: React.FC<{node: ProgramNode, ctx: NodeViewCtx}> = ({node, ctx}) => {
   return <DeclListView decls={node.decls} parentNode={node} ctx={ctx} />;
 }
@@ -538,6 +593,12 @@ const NodeView: React.FC<{node: ASTNode, ctx: NodeViewCtx, isListItem: boolean, 
     case 'Eq':
       return <EqView key={node.nid} node={node} ctx={ctx} isListItem={isListItem} allowed={allowed} />
 
+    case 'When':
+      return <WhenView key={node.nid} node={node} ctx={ctx} isListItem={isListItem} allowed={allowed} />
+
+    case 'Emit':
+      return <EmitView key={node.nid} node={node} ctx={ctx} isListItem={isListItem} allowed={allowed} />
+
     default:
       throw new Error('unimplemented');
   }
@@ -554,6 +615,19 @@ const DeclListView: React.FC<{decls: ReadonlyArray<DeclNode>, parentNode: ASTNod
   }
 
   return <BlockVList childViews={childViews} dropIdxs={dropIdxs} parentNodeId={parentNode.nid} allowed="decl" />;
+}
+
+const StmtListView: React.FC<{stmts: ReadonlyArray<StmtNode>, parentNode: ASTNode, ctx: NodeViewCtx}> = ({stmts, parentNode, ctx}) => {
+  const childViews = new Map(stmts.map(stmt => [stmt.nid, <NodeView key={stmt.nid} node={stmt} ctx={ctx} isListItem={true} allowed="stmt" />]));
+
+  const dropIdxs: Set<number> = new Set();
+  for (const dropLoc of ctx.dropLocs) {
+    if ((dropLoc.type === 'intoList') && (dropLoc.nodeId === parentNode.nid)) {
+      dropIdxs.add(dropLoc.idx);
+    }
+  }
+
+  return <BlockVList childViews={childViews} dropIdxs={dropIdxs} parentNodeId={parentNode.nid} allowed="stmt" />;
 }
 
 type DropLoc =
@@ -638,6 +712,14 @@ function progInsertListNode(program: ProgramNode, parentNodeId: NodeId, idx: num
           return {
             ...node,
             decls: insertIntoArray(node.decls, idx, newNode),
+          };
+        }
+
+        case 'When': {
+          invariant(isStmtNode(newNode));
+          return {
+            ...node,
+            stmts: insertIntoArray(node.stmts, idx, newNode),
           };
         }
 
@@ -827,12 +909,17 @@ const CodeEditor: React.FC<{editorCtx: EditorContext<Code, undefined>}> = ({edit
         {pid: 'sprite', type: {type: 'EV', typeId: 'sprite'}},
       ],
     }],
+    ['instTouched', {
+      tmpl: 'this was touched',
+      params: [],
+    }],
   ];
 
   // the "named returns" of the implicit top-level function, with their expected types
   const topReturns: ReadonlyArray<[ASTNode, Type]> = [
     [{type: 'VarName', nid: 'moveTarget', name: 'move target'}, {type: 'Vec2'}],
     [{type: 'VarName', nid: 'moveSpeed', name: 'move speed'}, {type: 'Num'}],
+    [{type: 'VarName', nid: 'removeInst', name: 'remove this'}, {type: 'UnitEvent'}]
   ];
 
   const varAn: Map<NodeId, Analysis> = new Map();
@@ -886,6 +973,23 @@ const CodeEditor: React.FC<{editorCtx: EditorContext<Code, undefined>}> = ({edit
       nid: 'palette-origin',
       refId: 'origin',
     },
+    {
+      type: 'When',
+      nid: 'palette-when',
+      evts: {type: 'Hole', nid: 'when_evts'},
+      stmts: [],
+    },
+    {
+      type: 'VarRef',
+      nid: 'palette-return-remove-inst',
+      refId: 'removeInst',
+    },
+    {
+      type: 'Emit',
+      nid: 'palette-emit',
+      evts: {type: 'Hole', nid: 'emit_evts'},
+      expr: {type: 'Hole', nid: 'emit_expr'},
+    },
   ];
 
   const handleDragMove = (e: Event) => {
@@ -897,6 +1001,9 @@ const CodeEditor: React.FC<{editorCtx: EditorContext<Code, undefined>}> = ({edit
         case 'decl':
           return isDeclNode(node);
 
+        case 'stmt':
+          return isStmtNode(node);
+
         case 'value':
           return isValueExprNode(node);
 
@@ -907,7 +1014,7 @@ const CodeEditor: React.FC<{editorCtx: EditorContext<Code, undefined>}> = ({edit
           return false;
 
         default:
-          throw new Error('unimplemented');
+          throw new Error('unimplemented: ' + allowed);
       }
     };
 

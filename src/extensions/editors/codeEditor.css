@@ -30,7 +30,7 @@
   outline: 2px solid black;
 }
 
-.CodeEditor-block-style-expr, .CodeEditor-block-style-decl, .CodeEditor-block-style-hole {
+.CodeEditor-block-style-expr, .CodeEditor-block-style-decl, .CodeEditor-block-style-stmt, .CodeEditor-block-style-hole {
   padding: 0.5em 1em;
 }
 

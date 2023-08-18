@@ -40,6 +40,9 @@ export interface VarRefNode {
   readonly nid: NodeId;
   readonly refId: NodeId;
 }
+export function isVarRefNode(node: ASTNode): node is VarRefNode {
+  return (node.type === 'VarRef');
+}
 
 export interface VarNameNode {
   readonly type: 'VarName';
@@ -57,7 +60,7 @@ export interface EqNode {
 export interface EmitNode {
   readonly type: 'Emit';
   readonly nid: NodeId;
-  readonly evts: VarRefNode; // event var we are emitting to
+  readonly evts: MutTargetNode; // event var we are emitting to
   readonly expr: ValueExprNode; // the value we are emitting
 }
 
@@ -94,9 +97,19 @@ export function isBindExprNode(node: ASTNode): node is BindExprNode {
   return (node.type === 'VarName') || (node.type === 'VarRef') || (node.type === 'Hole');
 }
 
+export type MutTargetNode =
+  | VarRefNode
+  | HoleNode;
+export function isMutTargetNode(node: ASTNode): node is MutTargetNode {
+  return (node.type === 'VarRef') || (node.type === 'Hole');
+}
+
 export type StmtNode =
   | EqNode
   | EmitNode;
+export function isStmtNode(node: ASTNode): node is StmtNode {
+  return (node.type === 'Eq') || (node.type === 'Emit');
+}
 
 export type ASTNode =
   | DeclNode
