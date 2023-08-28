@@ -563,9 +563,9 @@ const EmitView: React.FC<{node: EmitNode, ctx: NodeViewCtx, isListItem: boolean,
   return (
     <Block node={node} ctx={ctx} style="stmt" isListItem={isListItem} allowed={allowed}>
       <BlockLine>
-        <BlockLineText text="emit on" />
+        <BlockLineText text="trigger" />
         <NodeView node={node.evts} ctx={childCtx} isListItem={false} allowed="bind" />
-        <BlockLineText text="value" />
+        <BlockLineText text="with" />
         <NodeView node={node.expr} ctx={childCtx} isListItem={false} allowed="value" />
       </BlockLine>
     </Block>
