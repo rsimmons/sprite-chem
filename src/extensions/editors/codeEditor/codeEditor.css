@@ -26,8 +26,12 @@
   cursor: grab;
 }
 
-.CodeEditor-block-highlight {
+.CodeEditor-block.CodeEditor-highlight-valid {
   outline: 2px solid black;
+}
+
+.CodeEditor-block.CodeEditor-highlight-invalid {
+  outline: 2px solid red;
 }
 
 .CodeEditor-block-style-expr, .CodeEditor-block-style-decl, .CodeEditor-block-style-stmt, .CodeEditor-block-style-hole {
@@ -64,8 +68,13 @@
   margin-bottom: 0.2em;
 }
 
-.CodeEditor-block-vlist-sep-highlight {
+.CodeEditor-block-vlist-sep.CodeEditor-highlight-valid {
   background: black;
+  box-shadow: 0 0 3px rgba(0, 0, 0, 0.5);
+}
+
+.CodeEditor-block-vlist-sep.CodeEditor-highlight-invalid {
+  background: red;
   box-shadow: 0 0 3px rgba(0, 0, 0, 0.5);
 }
 

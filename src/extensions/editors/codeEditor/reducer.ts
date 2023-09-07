@@ -36,23 +36,36 @@ export type DropLoc =
     readonly idx: number; // may equal list length to go after last
   };
 
+interface PotentialDrop {
+  readonly potentialNode: ASTNode;
+  readonly dropLoc: DropLoc;
+  readonly valid: boolean;
+}
+
 export interface CodeEditorState {
   readonly program: ProgramNode;
-  readonly potentialDrops: ReadonlyMap<string, { // key is dragId
-    readonly potentialNode: ASTNode;
-    readonly dropLoc: DropLoc;
-  }>;
+  readonly potentialDrops: ReadonlyMap<string, PotentialDrop>; // key is dragId
   readonly outerEnv: OuterStaticEnv;
   readonly analysis: Analysis; // without UDFs there is only one static environment for now
 }
 
-export function updateAnalysis(state: CodeEditorState): CodeEditorState {
+function updateAnalysis(state: CodeEditorState): CodeEditorState {
   const analysis = analyzeProgram(state.program, state.outerEnv);
-  console.log('analysis', analysis);
+  invariant(analysis.errors.size === 0, 'program should be valid');
   return {
     ...state,
     analysis,
   };
+}
+
+function applyPotentialDrop(node: ASTNode, dropLoc: DropLoc, program: ProgramNode): ProgramNode {
+  switch (dropLoc.type) {
+    case 'ontoNode':
+      return progReplaceNodeId(program, dropLoc.nodeId, node);
+
+    case 'intoList':
+      return progInsertListNode(program, dropLoc.nodeId, dropLoc.idx, node);
+  }
 }
 
 export function reducer(state: CodeEditorState, action: CodeEditorAction): CodeEditorState {
@@ -86,11 +99,16 @@ export function reducer(state: CodeEditorState, action: CodeEditorAction): CodeE
     }
 
     case 'setPotentialDrop': {
+      const testProgram = applyPotentialDrop(action.potentialNode, action.dropLoc, state.program);
+      const valid = (analyzeProgram(testProgram, state.outerEnv).errors.size === 0);
+
       const newPotentialDrops = new Map(state.potentialDrops);
       newPotentialDrops.set(action.dragId, {
         potentialNode: action.potentialNode,
         dropLoc: action.dropLoc,
+        valid,
       });
+
       return {
         ...state,
         potentialDrops: newPotentialDrops,
@@ -118,22 +136,19 @@ export function reducer(state: CodeEditorState, action: CodeEditorAction): CodeE
         const newPotentialDrops = new Map(state.potentialDrops);
         newPotentialDrops.delete(action.dragId);
 
-        switch (pd.dropLoc.type) {
-          case 'ontoNode': {
-            return updateAnalysis({
-              ...state,
-              program: progReplaceNodeId(state.program, pd.dropLoc.nodeId, pd.potentialNode),
-              potentialDrops: newPotentialDrops,
-            });
-          }
+        if (pd.valid) {
+          const newProgram = applyPotentialDrop(pd.potentialNode, pd.dropLoc, state.program);
 
-          case 'intoList': {
-            return updateAnalysis({
-              ...state,
-              program: progInsertListNode(state.program, pd.dropLoc.nodeId, pd.dropLoc.idx, pd.potentialNode),
-              potentialDrops: newPotentialDrops,
-            });
-          }
+          return updateAnalysis({
+            ...state,
+            program: newProgram,
+            potentialDrops: newPotentialDrops,
+          });
+        } else {
+          return {
+            ...state,
+            potentialDrops: newPotentialDrops,
+          };
         }
       } else {
         return state;

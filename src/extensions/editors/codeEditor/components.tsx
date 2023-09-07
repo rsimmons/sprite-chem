@@ -18,7 +18,7 @@ interface NodeViewCtx {
   readonly dispatch: CodeEditorDispatch;
   readonly allowDrag: 'yes' | 'no' | 'no-children';
   readonly editorCtx: EditorContext<Code, undefined>;
-  readonly dropLocs: ReadonlyArray<DropLoc>;
+  readonly dropLocs: ReadonlyArray<[DropLoc, boolean]>; // boolean is "valid"
 }
 
 const Block: React.FC<{children?: React.ReactNode, node: ASTNode, ctx: NodeViewCtx, style: string, isListItem: boolean, allowed: string}> = ({children, node, ctx, style, isListItem, allowed}) => {
@@ -82,11 +82,11 @@ const Block: React.FC<{children?: React.ReactNode, node: ASTNode, ctx: NodeViewC
     });
   };
 
-  let dropHL = false;
-  for (const dropLoc of ctx.dropLocs) {
+  let dropHL: 'none' | 'valid' | 'invalid' = 'none';
+  for (const [dropLoc, valid] of ctx.dropLocs) {
     if (dropLoc.type === 'ontoNode') {
       if (dropLoc.nodeId === node.nid) {
-        dropHL = true;
+        dropHL = valid ? 'valid' : 'invalid';
         break;
       }
     }
@@ -94,7 +94,7 @@ const Block: React.FC<{children?: React.ReactNode, node: ASTNode, ctx: NodeViewC
 
   return (
     <div
-      className={'CodeEditor-block' + (' CodeEditor-block-style-' + style) + (dropHL ? ' CodeEditor-block-highlight' : '')}
+      className={'CodeEditor-block' + (' CodeEditor-block-style-' + style) + ' CodeEditor-highlight-' + dropHL}
       ref={blockElem}
       onPointerDown={handlePointerDown}
       data-node-id={node.nid}
@@ -114,9 +114,9 @@ const BlockLineText: React.FC<{text: string}> = ({text}) => {
   return <div className="CodeEditor-block-line-text">{text}</div>
 };
 
-const BlockVListSep: React.FC<{idx: number, parentNodeId: NodeId | undefined, hl: boolean, last: boolean, allowed: string}> = ({idx, parentNodeId, hl, last, allowed}) => {
+const BlockVListSep: React.FC<{idx: number, parentNodeId: NodeId | undefined, hl: 'none' | 'valid' | 'invalid', last: boolean, allowed: string}> = ({idx, parentNodeId, hl, last, allowed}) => {
   return <div
-    className={'CodeEditor-block-vlist-sep' + (hl ? ' CodeEditor-block-vlist-sep-highlight': '')}
+    className={'CodeEditor-block-vlist-sep' + ' CodeEditor-highlight-' + hl}
     data-parent-node-id={parentNodeId}
     data-index={idx}
     data-last={last || undefined}
@@ -124,19 +124,27 @@ const BlockVListSep: React.FC<{idx: number, parentNodeId: NodeId | undefined, hl
   />;
 }
 
-const BlockVList: React.FC<{childViews: ReadonlyMap<string, React.ReactNode>, dropIdxs: ReadonlySet<number>, parentNodeId: NodeId | undefined, allowed: string}> = ({childViews, dropIdxs, parentNodeId, allowed}) => {
+const BlockVList: React.FC<{childViews: ReadonlyMap<string, React.ReactNode>, dropIdxs: ReadonlyMap<number, boolean>, parentNodeId: NodeId | undefined, allowed: string}> = ({childViews, dropIdxs, parentNodeId, allowed}) => {
+  const dropIdxToHL = (idx: number) => {
+    if (dropIdxs.has(idx)) {
+      return dropIdxs.get(idx) ? 'valid' : 'invalid';
+    } else {
+      return 'none';
+    }
+  };
+
   return (
     <div className="CodeEditor-block-vlist">
       {(childViews.size > 0) ? Array.from(childViews).map(([key, child], idx) => (
         <React.Fragment key={key}>
-          <BlockVListSep idx={idx} parentNodeId={parentNodeId} hl={dropIdxs.has(idx)} last={false} allowed={allowed} />
+          <BlockVListSep idx={idx} parentNodeId={parentNodeId} hl={dropIdxToHL(idx)} last={false} allowed={allowed} />
           {child}
 
           {(idx === (childViews.size-1)) &&
-            <BlockVListSep idx={idx+1} parentNodeId={parentNodeId} hl={dropIdxs.has(idx+1)} last={true} allowed={allowed} />
+            <BlockVListSep idx={idx+1} parentNodeId={parentNodeId} hl={dropIdxToHL(idx+1)} last={true} allowed={allowed} />
           }
         </React.Fragment>
-      )) : <BlockVListSep idx={0} parentNodeId={parentNodeId} hl={dropIdxs.has(0)} last={true} allowed={allowed} />}
+      )) : <BlockVListSep idx={0} parentNodeId={parentNodeId} hl={dropIdxToHL(0)} last={true} allowed={allowed} />}
     </div>
   );
 };
@@ -374,10 +382,10 @@ export const NodeView: React.FC<{node: ASTNode, ctx: NodeViewCtx, isListItem: bo
 const DeclListView: React.FC<{decls: ReadonlyArray<DeclNode>, parentNode: ASTNode, ctx: NodeViewCtx}> = ({decls, parentNode, ctx}) => {
   const childViews = new Map(decls.map(decl => [decl.nid, <NodeView key={decl.nid} node={decl} ctx={ctx} isListItem={true} allowed="decl" />]));
 
-  const dropIdxs: Set<number> = new Set();
-  for (const dropLoc of ctx.dropLocs) {
+  const dropIdxs: Map<number, boolean> = new Map(); // boolean is "valid"
+  for (const [dropLoc, valid] of ctx.dropLocs) {
     if ((dropLoc.type === 'intoList') && (dropLoc.nodeId === parentNode.nid)) {
-      dropIdxs.add(dropLoc.idx);
+      dropIdxs.set(dropLoc.idx, valid);
     }
   }
 
@@ -387,10 +395,10 @@ const DeclListView: React.FC<{decls: ReadonlyArray<DeclNode>, parentNode: ASTNod
 const StmtListView: React.FC<{stmts: ReadonlyArray<StmtNode>, parentNode: ASTNode, ctx: NodeViewCtx}> = ({stmts, parentNode, ctx}) => {
   const childViews = new Map(stmts.map(stmt => [stmt.nid, <NodeView key={stmt.nid} node={stmt} ctx={ctx} isListItem={true} allowed="stmt" />]));
 
-  const dropIdxs: Set<number> = new Set();
-  for (const dropLoc of ctx.dropLocs) {
+  const dropIdxs: Map<number, boolean> = new Map(); // boolean is "valid"
+  for (const [dropLoc, valid] of ctx.dropLocs) {
     if ((dropLoc.type === 'intoList') && (dropLoc.nodeId === parentNode.nid)) {
-      dropIdxs.add(dropLoc.idx);
+      dropIdxs.set(dropLoc.idx, valid);
     }
   }
 

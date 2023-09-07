@@ -221,7 +221,7 @@ const CodeEditor: React.FC<{editorCtx: EditorContext<Code, undefined>}> = ({edit
             dispatch,
             allowDrag: 'yes',
             editorCtx,
-            dropLocs: [...state.potentialDrops.values()].map(info => info.dropLoc),
+            dropLocs: [...state.potentialDrops.values()].map(info => [info.dropLoc, info.valid]),
           }}
         />
       </div>

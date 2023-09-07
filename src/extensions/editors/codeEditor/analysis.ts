@@ -84,6 +84,10 @@ export interface Analysis {
   readonly expectedType: ReadonlyMap<NodeId, Type>;
 
   readonly errors: ReadonlyMap<NodeId, ReadonlyArray<AnalysisError>>;
+
+  // usually Hole nodes will be incomplete, but if we allow optional parameters
+  // then they might not be
+  readonly incomplete: ReadonlySet<NodeId>;
 }
 
 interface MutableAnalysis {
@@ -92,6 +96,7 @@ interface MutableAnalysis {
   readonly nodeType: Map<NodeId, Type>;
   readonly expectedType: Map<NodeId, Type>;
   readonly errors: Map<NodeId, Array<AnalysisError>>;
+  readonly incomplete: Set<NodeId>;
 }
 
 function initMutableAnalysis(outerEnv: OuterStaticEnv): MutableAnalysis {
@@ -101,6 +106,7 @@ function initMutableAnalysis(outerEnv: OuterStaticEnv): MutableAnalysis {
     nodeType: new Map(outerEnv.varType),
     expectedType: new Map(),
     errors: new Map(),
+    incomplete: new Set(),
   };
 }
 
@@ -181,7 +187,9 @@ function analyzeValueExpr(expr: ValueExprNode, expectedType: Type, analysis: Mut
 
   analysis.nodeType.set(expr.nid, exprType);
   analysis.expectedType.set(expr.nid, expectedType);
-  if (!isSubtype(exprType, expectedType)) {
+  if (exprType.type === 'Unknown') {
+    analysis.incomplete.add(expr.nid);
+  } else if (!isSubtype(exprType, expectedType)) {
     addError(analysis, expr.nid, 'type mismatch');
   }
 }
@@ -220,6 +228,74 @@ function analyzeDeclList(decls: ReadonlyArray<DeclNode>, outerEnv: OuterStaticEn
         break;
       }
 
+      case 'When': {
+        for (const stmt of decl.stmts) {
+          switch (stmt.type) {
+            case 'Emit': {
+              switch (stmt.evts.type) {
+                case 'VarRef': {
+                  const evtsId = stmt.evts.refId;
+                  const evtsType = analysis.nodeType.get(evtsId);
+                  if (evtsType === undefined) {
+                    // should this be in invariant()?
+                    addError(analysis, stmt.evts.nid, 'unknown variable');
+                  } else {
+                    if (evtsType.type !== 'UnitEvent') {
+                      addError(analysis, stmt.evts.nid, 'not an event');
+                    } else {
+                      const status = namedReturnStatus.get(evtsId);
+                      if (status === undefined) {
+                        namedReturnStatus.set(evtsId, 'emitted-to');
+                      } else if (status === 'bound') {
+                        addError(analysis, stmt.evts.nid, 'cannot emit to bound variable');
+                      } else if (status === 'emitted-to') {
+                        // ok
+                      } else {
+                        throw new Error('unimplemented');
+                      }
+                    }
+                  }
+                  break;
+                }
+
+                case 'Hole':
+                  break;
+
+                default:
+                  throw new Error('unimplemented');
+              }
+              break;
+            }
+
+            case 'Eq': {
+              switch (stmt.lhs.type) {
+                case 'VarRef': {
+                  addError(analysis, stmt.lhs.nid, 'cannot assign to existing variable in when');
+                  break;
+                }
+
+                case 'VarName': {
+                  // TODO: implement
+                  break;
+                }
+
+                case 'Hole': {
+                  break;
+                }
+
+                default:
+                  throw new Error('unimplemented');
+              }
+              break;
+            }
+
+            default:
+              throw new Error('unimplemented');
+          }
+        }
+        break;
+      }
+
       default:
         throw new Error('unimplemented');
     }
@@ -231,12 +307,17 @@ function analyzeDeclList(decls: ReadonlyArray<DeclNode>, outerEnv: OuterStaticEn
         let expectedType: Type;
         switch (decl.lhs.type) {
           case 'VarRef': {
-            if (namedReturnConflicts.has(decl.lhs.refId)) {
-              addError(analysis, decl.lhs.nid, 'named return has conflicts');
+            if (outerEnv.namedReturns.has(decl.lhs.refId)) {
+              if (namedReturnConflicts.has(decl.lhs.refId)) {
+                addError(analysis, decl.lhs.nid, 'named return has conflicts');
+              }
+              const retType = analysis.nodeType.get(decl.lhs.refId);
+              invariant(retType !== undefined);
+              expectedType = retType;
+            } else {
+              // LHS is invalid, but we can still analyze RHS
+              expectedType = {type: 'Any'};
             }
-            const retType = analysis.nodeType.get(decl.lhs.refId);
-            invariant(retType !== undefined);
-            expectedType = retType;
             break;
           }
 
@@ -253,6 +334,11 @@ function analyzeDeclList(decls: ReadonlyArray<DeclNode>, outerEnv: OuterStaticEn
 
         analyzeValueExpr(decl.rhs, expectedType, analysis);
 
+        break;
+      }
+
+      case 'When': {
+        analyzeValueExpr(decl.evts, {type: 'UnitEvent'}, analysis);
         break;
       }
 
