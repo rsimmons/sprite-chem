@@ -2,6 +2,7 @@ type Pos = {x: number, y: number};
 
 export interface DragInfo<T> {
   startPos: Pos;
+  lastPos: Pos;
   pos: Pos;
   obj: T;
 }
@@ -17,6 +18,7 @@ export class DragTracker<T> {
     const pos = {x: e.clientX, y: e.clientY};
     this.dragInfo.set(e.pointerId, {
       startPos: pos,
+      lastPos: pos,
       pos,
       obj,
     });
@@ -25,6 +27,7 @@ export class DragTracker<T> {
   public pointerMove(e: PointerEvent): DragInfo<T> | undefined {
     const di = this.dragInfo.get(e.pointerId);
     if (di) {
+      di.lastPos = di.pos;
       di.pos = {x: e.clientX, y: e.clientY};
       return di;
     } else {

@@ -9,6 +9,7 @@ import { NodeView, ProgramView } from './components';
 import { CodeEditorState, DropLoc, reducer } from './reducer';
 import { outerEnv, analyzedPaletteNodes } from './template';
 import { analyzeProgram } from './analysis';
+import { DragTracker } from '../../../extshared/dragTracker';
 
 const CodeEditor: React.FC<{editorCtx: EditorContext<Code, undefined>}> = ({editorCtx}) => {
   const [state, dispatch] = useReducer(reducer, null, (): CodeEditorState => {
@@ -31,7 +32,8 @@ const CodeEditor: React.FC<{editorCtx: EditorContext<Code, undefined>}> = ({edit
   });
 
   const editorRef = useRef<HTMLDivElement>(null);
-
+  const paletteRef = useRef<HTMLDivElement>(null);
+  const codeRef = useRef<HTMLDivElement>(null);
 
   const handleDragMove = (e: Event) => {
     const ed = (e as CustomEvent<PointerEventData>).detail;
@@ -180,21 +182,67 @@ const CodeEditor: React.FC<{editorCtx: EditorContext<Code, undefined>}> = ({edit
     });
   };
 
+  // track drags "locally" for scrolling, etc.
+  type LocalDragObj = 'palette' | 'code';
+  const localDragTracker = useRef<DragTracker<LocalDragObj>>(new DragTracker());
+  const handlePointerDown = (e: React.PointerEvent, dragObj: LocalDragObj) => {
+    // release capture if we implicitly got it (happens with touch by default)
+    if (!(e.target instanceof HTMLElement)) {
+      throw new Error('unclear if this can happen');
+    }
+    if (e.target.hasPointerCapture(e.pointerId)) {
+      e.target.releasePointerCapture(e.pointerId);
+    }
+
+    localDragTracker.current.pointerDown(e.nativeEvent, dragObj);
+  };
+  const handlePointerMove = (e: PointerEvent) => {
+    const di = localDragTracker.current.pointerMove(e);
+    if (di) {
+      switch (di.obj) {
+        case 'palette': {
+          const dy = di.pos.y - di.lastPos.y;
+          const paletteElem = paletteRef.current;
+          invariant(paletteElem);
+          paletteElem.scrollTop -= dy;
+          break;
+        }
+
+        case 'code':
+          const dy = di.pos.y - di.lastPos.y;
+          const codeElem = codeRef.current;
+          invariant(codeElem);
+          codeElem.scrollTop -= dy;
+          break;
+      }
+    }
+  };
+  const handlePointerUp = (e: PointerEvent) => {
+    const di = localDragTracker.current.pointerUp(e);
+  };
+
   useEffect(() => {
     editorCtx.pointerEventTarget.addEventListener('dragMove', handleDragMove);
     editorCtx.pointerEventTarget.addEventListener('dragDrop', handleDragDrop);
+    window.addEventListener('pointermove', handlePointerMove);
+    window.addEventListener('pointerup', handlePointerUp);
     return () => {
       editorCtx.pointerEventTarget.removeEventListener('dragMove', handleDragMove);
       editorCtx.pointerEventTarget.removeEventListener('dragDrop', handleDragDrop);
+      window.removeEventListener('pointermove', handlePointerMove);
+      window.removeEventListener('pointerup', handlePointerUp);
     };
-  }, [handleDragMove, handleDragDrop]);
+  }, [handleDragMove, handleDragDrop, handlePointerMove, handlePointerUp]);
 
   return (
     <div
       className="CodeEditor"
       ref={editorRef}
     >
-      <div className="CodeEditor-palette">
+      <div className="CodeEditor-palette"
+        onPointerDown={(e) => { handlePointerDown(e, 'palette'); }}
+        ref={paletteRef}
+      >
         {analyzedPaletteNodes.map(([node, analysis]) => (
           <NodeView
             key={node.nid}
@@ -212,7 +260,10 @@ const CodeEditor: React.FC<{editorCtx: EditorContext<Code, undefined>}> = ({edit
           />
         ))}
       </div>
-      <div className="CodeEditor-code">
+      <div className="CodeEditor-code"
+        onPointerDown={(e) => { handlePointerDown(e, 'code'); }}
+        ref={codeRef}
+      >
         <ProgramView
           node={state.program}
           ctx={{

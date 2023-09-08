@@ -4,6 +4,7 @@
   height: 100%;
   display: flex;
   font-size: 12px;
+  user-select: none;
 }
 
 .App-output-rest {

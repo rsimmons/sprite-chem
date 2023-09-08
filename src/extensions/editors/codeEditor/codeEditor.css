@@ -9,13 +9,16 @@
 .CodeEditor-palette {
   border-right: 1px solid #ccc;
   padding: 1em;
-  overflow-x: hidden;
-  overflow-y: auto;
-  touch-action: pan-y;
 }
 
 .CodeEditor-palette > *:not(:last-child) {
   margin-bottom: 1em;
+}
+
+.CodeEditor-palette, .CodeEditor-code {
+  overflow-x: hidden;
+  overflow-y: auto;
+  touch-action: none;
 }
 
 .CodeEditor-block {
@@ -57,9 +60,6 @@
 
 .CodeEditor-block-vlist {
   padding: 0 1em;
-  overflow-x: hidden;
-  overflow-y: auto;
-  touch-action: pan-y;
 }
 
 .CodeEditor-block-vlist-sep {
