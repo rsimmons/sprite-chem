@@ -230,16 +230,18 @@ const LiteralView: React.FC<{node: LiteralNode, ctx: NodeViewCtx, isListItem: bo
     }
   };
 
+  const readOnly = (ctx.kind === 'palette');
+
   return (
     <Block node={node} ctx={ctx} style={(node.sub.type === 'ev') ? 'ev' : 'expr'} isListItem={isListItem} allowed={allowed}>
       <BlockLine>
         {(() => {
           switch (node.sub.type) {
             case 'text':
-              return <input type="text" value={node.sub.value} onChange={handleChange} />
+              return <input type="text" value={node.sub.value} onChange={handleChange} readOnly={readOnly} />
 
             case 'number':
-              return <input type="number" value={node.sub.value} onChange={handleChange} />
+              return <input type="number" value={node.sub.value} onChange={handleChange} readOnly={readOnly} />
 
             case 'ev': {
               const previewer = ctx.editorCtx.getPreviewer(node.sub.value.typeId);
