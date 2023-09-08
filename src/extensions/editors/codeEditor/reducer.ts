@@ -1,7 +1,7 @@
 import { genUidRandom, invariant } from "../../../util";
 import { ASTNode, NodeId, ProgramNode, isBindExprNode, isDeclNode, isValueExprNode } from "../../types/code";
 import { Analysis, OuterStaticEnv, analyzeProgram } from "./analysis";
-import { progInsertListNode, progRemoveListNode, progReplaceNode, progReplaceNodeId } from "./tree";
+import { progInsertListNode, progRemoveNode, progReplaceNode, progReplaceNodeId } from "./tree";
 
 export type CodeEditorAction =
   {
@@ -80,22 +80,10 @@ export function reducer(state: CodeEditorState, action: CodeEditorAction): CodeE
     }
 
     case 'removeNodeForDrag': {
-      if (isDeclNode(action.node)) {
-        return updateAnalysis({
-          ...state,
-          program: progRemoveListNode(state.program, action.node.nid),
-        });
-      } else if (isValueExprNode(action.node) || isBindExprNode(action.node)) {
-        return updateAnalysis({
-          ...state,
-          program: progReplaceNodeId(state.program, action.node.nid, {
-            type: 'Hole',
-            nid: genUidRandom(),
-          }),
-        });
-      } else {
-        throw new Error('unimplemented');
-      }
+      return updateAnalysis({
+        ...state,
+        program: progRemoveNode(state.program, action.node),
+      });
     }
 
     case 'setPotentialDrop': {

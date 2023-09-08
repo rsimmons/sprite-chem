@@ -34,6 +34,9 @@ export interface WhenNode {
   readonly evts: ValueExprNode;
   readonly stmts: ReadonlyArray<StmtNode>;
 }
+export function isWhenNode(node: ASTNode): node is WhenNode {
+  return (node.type === 'When');
+}
 
 export interface VarRefNode {
   readonly type: 'VarRef';

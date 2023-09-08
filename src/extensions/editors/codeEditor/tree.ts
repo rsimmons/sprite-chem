@@ -1,5 +1,5 @@
 import { genUidRandom, insertIntoArray, invariant } from '../../../util';
-import { ASTNode, NodeId, ProgramNode, isBindExprNode, isDeclNode, isMutTargetNode, isProgramNode, isStmtNode, isValueExprNode } from '../../types/code';
+import { ASTNode, NodeId, ProgramNode, isBindExprNode, isDeclNode, isMutTargetNode, isProgramNode, isStmtNode, isValueExprNode, isWhenNode } from '../../types/code';
 
 export function transformChildren<N extends ASTNode, X>(node: N, transform: (node: ASTNode, ctx: X) => ASTNode, ctx: X): N {
   // this could be factored out like transformNodeArr above
@@ -192,25 +192,39 @@ export function progInsertListNode(program: ProgramNode, parentNodeId: NodeId, i
   return newProgram;
 }
 
-export function progRemoveListNode(program: ProgramNode, nodeId: NodeId): ProgramNode {
+export function progRemoveNode(program: ProgramNode, removeNode: ASTNode): ProgramNode {
   let removeCount = 0;
 
   const transform = (node: ASTNode): ASTNode => {
-    let newNode = node;
-    switch (node.type) {
-      case 'Program': {
-        const matches = node.decls.filter(decl => (decl.nid === nodeId));
-        if (matches.length > 0) {
-          removeCount += matches.length;
+    if (node === removeNode) {
+      removeCount++;
+      return {
+        type: 'Hole',
+        nid: genUidRandom(),
+      };
+    } else {
+      let newNode = node;
+      if (isProgramNode(node)) {
+        const newDecls = node.decls.filter(decl => (decl !== removeNode));
+        if (newDecls.length !== node.decls.length) {
+          removeCount += (node.decls.length - newDecls.length);
           newNode = {
             ...node,
-            decls: node.decls.filter(decl => (decl.nid !== nodeId)),
+            decls: newDecls,
+          };
+        }
+      } else if (isWhenNode(node)) {
+        const newStmts = node.stmts.filter(stmt => (stmt !== removeNode));
+        if (newStmts.length !== node.stmts.length) {
+          removeCount += (node.stmts.length - newStmts.length);
+          newNode = {
+            ...node,
+            stmts: newStmts,
           };
         }
       }
+      return transformChildren(newNode, transform, undefined);
     }
-
-    return transformChildren(newNode, transform, undefined);
   }
 
   const newProgram = transform(program);
