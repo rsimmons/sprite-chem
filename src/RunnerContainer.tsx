@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { invariant } from './util';
 import { TEMPLATE } from './config';
-import { Runner, RunnerReturn } from './extlib/runner';
+import { RunnerReturn } from './extlib/runner';
 import { AppDispatch, AppState } from './state';
 import { useConstant } from './utilReact';
 import './RunnerContainer.css';

@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { Vec2 } from "../../../vec";
-import { ASTNode, Code, DeclNode, EmitNode, EqNode, FnAppNode, HoleNode, LiteralNode, NodeId, ProgramNode, StmtNode, VarNameNode, VarRefNode, WhenNode } from "../../types/code";
+import { ASTNode, Code, DeclNode, EmitNode, EqNode, FnAppNode, HoleNode, LiteralNode, NodeId, ProgramNode, StmtNode, VarRefNode, WhenNode } from "../../types/code";
 import { treeRandomizeNodeIds } from "./tree";
 import { useConstant } from '../../../utilReact';
 import { Previewer, PreviewerReturn } from '../../../extlib/previewer';
@@ -21,7 +21,7 @@ interface NodeViewCtx {
   readonly dropLocs: ReadonlyArray<[DropLoc, boolean]>; // boolean is "valid"
 }
 
-const Block: React.FC<{children?: React.ReactNode, node: ASTNode, ctx: NodeViewCtx, style: string, isListItem: boolean, allowed: string}> = ({children, node, ctx, style, isListItem, allowed}) => {
+const Block: React.FC<{children?: React.ReactNode, node: ASTNode, ctx: NodeViewCtx, blockStyle: string, isListItem: boolean, allowed: string}> = ({children, node, ctx, blockStyle, isListItem, allowed}) => {
   const blockElem = useRef<HTMLDivElement>(null);
 
   const handlePointerDown = (e: React.PointerEvent) => {
@@ -94,7 +94,7 @@ const Block: React.FC<{children?: React.ReactNode, node: ASTNode, ctx: NodeViewC
 
   return (
     <div
-      className={'CodeEditor-block' + (' CodeEditor-block-style-' + style) + ' CodeEditor-highlight-' + dropHL}
+      className={`CodeEditor-block CodeEditor-block-style-${blockStyle} CodeEditor-highlight-${dropHL}`}
       ref={blockElem}
       onPointerDown={handlePointerDown}
       data-node-id={node.nid}
@@ -116,7 +116,7 @@ const BlockLineText: React.FC<{text: string}> = ({text}) => {
 
 const BlockVListSep: React.FC<{idx: number, parentNodeId: NodeId | undefined, hl: 'none' | 'valid' | 'invalid', last: boolean, allowed: string}> = ({idx, parentNodeId, hl, last, allowed}) => {
   return <div
-    className={'CodeEditor-block-vlist-sep' + ' CodeEditor-highlight-' + hl}
+    className={`CodeEditor-block-vlist-sep CodeEditor-highlight-${hl}`}
     data-parent-node-id={parentNodeId}
     data-index={idx}
     data-last={last || undefined}
@@ -154,7 +154,7 @@ const HoleView: React.FC<{node: HoleNode, ctx: NodeViewCtx, isListItem: boolean,
     <Block
       node={node}
       ctx={ctx}
-      style="hole"
+      blockStyle="hole"
       isListItem={isListItem}
       allowed={allowed}
     >&nbsp;</Block>
@@ -233,7 +233,7 @@ const LiteralView: React.FC<{node: LiteralNode, ctx: NodeViewCtx, isListItem: bo
   const readOnly = (ctx.kind === 'palette');
 
   return (
-    <Block node={node} ctx={ctx} style={(node.sub.type === 'ev') ? 'ev' : 'expr'} isListItem={isListItem} allowed={allowed}>
+    <Block node={node} ctx={ctx} blockStyle={(node.sub.type === 'ev') ? 'ev' : 'expr'} isListItem={isListItem} allowed={allowed}>
       <BlockLine>
         {(() => {
           switch (node.sub.type) {
@@ -267,7 +267,7 @@ const FnAppView: React.FC<{node: FnAppNode, ctx: NodeViewCtx, isListItem: boolea
   const childCtx = {...ctx, allowDrag: (ctx.allowDrag === 'no-children') ? 'no' : ctx.allowDrag};
 
   return (
-    <Block node={node} ctx={ctx} style="expr" isListItem={isListItem} allowed={allowed}>
+    <Block node={node} ctx={ctx} blockStyle="expr" isListItem={isListItem} allowed={allowed}>
       {parsed.lines.map((line, idx) => (
         <BlockLine key={idx}>
           {line.map((item, idx) => {
@@ -297,7 +297,7 @@ const VarRefView: React.FC<{node: VarRefNode, ctx: NodeViewCtx, isListItem: bool
   const refName = ctx.analysis.varName.get(node.refId);
   invariant(refName !== undefined);
   return (
-    <Block node={node} ctx={ctx} style="expr" isListItem={isListItem} allowed={allowed}>
+    <Block node={node} ctx={ctx} blockStyle="expr" isListItem={isListItem} allowed={allowed}>
       <BlockLine>
         <BlockLineText text={refName} />
       </BlockLine>
@@ -309,7 +309,7 @@ const EqView: React.FC<{node: EqNode, ctx: NodeViewCtx, isListItem: boolean, all
   const childCtx = {...ctx, allowDrag: (ctx.allowDrag === 'no-children') ? 'no' : ctx.allowDrag};
 
   return (
-    <Block node={node} ctx={ctx} style="decl" isListItem={isListItem} allowed={allowed}>
+    <Block node={node} ctx={ctx} blockStyle="decl" isListItem={isListItem} allowed={allowed}>
       <BlockLine>
         <NodeView node={node.lhs} ctx={childCtx} isListItem={false} allowed="bind" />
         <BlockLineText text="=" />
@@ -323,7 +323,7 @@ const WhenView: React.FC<{node: WhenNode, ctx: NodeViewCtx, isListItem: boolean,
   const childCtx = {...ctx, allowDrag: (ctx.allowDrag === 'no-children') ? 'no' : ctx.allowDrag};
 
   return (
-    <Block node={node} ctx={ctx} style="decl" isListItem={isListItem} allowed={allowed}>
+    <Block node={node} ctx={ctx} blockStyle="decl" isListItem={isListItem} allowed={allowed}>
       <BlockLine>
         <BlockLineText text="when" />
         <NodeView node={node.evts} ctx={childCtx} isListItem={false} allowed="value" />
@@ -338,7 +338,7 @@ const EmitView: React.FC<{node: EmitNode, ctx: NodeViewCtx, isListItem: boolean,
   const childCtx = {...ctx, allowDrag: (ctx.allowDrag === 'no-children') ? 'no' : ctx.allowDrag};
 
   return (
-    <Block node={node} ctx={ctx} style="stmt" isListItem={isListItem} allowed={allowed}>
+    <Block node={node} ctx={ctx} blockStyle="stmt" isListItem={isListItem} allowed={allowed}>
       <BlockLine>
         <BlockLineText text="trigger" />
         <NodeView node={node.evts} ctx={childCtx} isListItem={false} allowed="bind" />

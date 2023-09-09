@@ -1,13 +1,10 @@
 import { useEffect, useRef } from 'react';
 import { invariant } from './util';
 import { TEMPLATE } from './config';
-import { BeginDragValueArgs, Editor, EditorReturn, PointerID } from './extlib/editor';
-import { AppDispatch } from './state';
+import { BeginDragValueArgs, EditorReturn } from './extlib/editor';
 import { useConstant } from './utilReact';
 import './EditorContainer.css';
 import { EVWrapper } from './extlib/ev';
-import { EVTypeId } from './extlib/type';
-import { Vec2 } from './vec';
 
 const EditorContainer: React.FC<{
   readonly ev: EVWrapper<any>;

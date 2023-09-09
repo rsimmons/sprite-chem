@@ -1,5 +1,5 @@
 import { invariant } from "../../../util";
-import { ASTNode, DeclNode, NodeId, ProgramNode, ValueExprNode, isValueExprNode } from "../../types/code";
+import { ASTNode, DeclNode, NodeId, ProgramNode, ValueExprNode } from "../../types/code";
 
 // the externally-visible (caller-visible) interface to a function. similar to a function-type
 export interface FnExtIface {

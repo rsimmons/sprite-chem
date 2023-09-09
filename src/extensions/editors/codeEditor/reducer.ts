@@ -1,5 +1,5 @@
-import { genUidRandom, invariant } from "../../../util";
-import { ASTNode, NodeId, ProgramNode, isBindExprNode, isDeclNode, isValueExprNode } from "../../types/code";
+import { invariant } from "../../../util";
+import { ASTNode, NodeId, ProgramNode } from "../../types/code";
 import { Analysis, OuterStaticEnv, analyzeProgram } from "./analysis";
 import { progInsertListNode, progRemoveNode, progReplaceNode, progReplaceNodeId } from "./tree";
 

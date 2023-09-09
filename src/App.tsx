@@ -2,12 +2,12 @@ import React, { useEffect, useRef, useState } from 'react';
 
 import PoolTabPanel from './PoolTabPanel';
 import { BeginDragEVArgs, BeginDragValueArgs, DragInfo, PointerEventData, PointerID } from './extlib/editor';
-import { ClientXY, invariant } from './util';
+import { invariant } from './util';
 import { AppAction, AppStateOrLoading, createInitState, reducer } from './state';
 import EditorContainer from './EditorContainer';
 import PreviewerContainer from './PreviewerContainer';
 import RunnerContainer from './RunnerContainer';
-import { Vec2, vec2scale, vec2sub } from './vec';
+import { Vec2, vec2sub } from './vec';
 import { TEMPLATE } from './config';
 import { useEffectfulReducer, useRunOnce } from './useEffectfulReducer';
 import './App.css';

@@ -4,8 +4,7 @@
  * and made configurable.
  */
 
-import { invariant } from "../../../util";
-import { ASTNode, NodeId, VarNameNode } from "../../types/code";
+import { ASTNode, NodeId } from "../../types/code";
 import { Analysis, FnExtIface, OuterStaticEnv, Type, analyzePaletteNode } from "./analysis";
 
 function makeFnApp(nid: NodeId, fnNid: NodeId, fnIface: FnExtIface): ASTNode {
