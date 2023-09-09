@@ -1,7 +1,7 @@
 import { ReactElement, useRef, useState } from 'react';
 import PreviewerContainer from './PreviewerContainer';
 import { ClientXY, getObjId, invariant } from './util';
-import { AppDispatch, AppState } from './newState';
+import { AppDispatch, AppState } from './state';
 import './PoolTabPanel.css';
 import { Vec2, vec2dist } from './vec';
 import EditorContainer from './EditorContainer';

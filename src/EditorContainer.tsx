@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react';
 import { invariant } from './util';
 import { TEMPLATE } from './config';
 import { BeginDragValueArgs, Editor, EditorReturn, PointerID } from './extlib/editor';
-import { AppDispatch } from './newState';
+import { AppDispatch } from './state';
 import { useConstant } from './utilReact';
 import './EditorContainer.css';
 import { EVWrapper } from './extlib/ev';
