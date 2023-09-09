@@ -1,3 +1,10 @@
+.CodeEditor-crash {
+  font-size: 3em;
+  text-align: center;
+  color: #c00;
+  padding-top: 1em;
+}
+
 .CodeEditor {
   width: 100%;
   height: 100%;

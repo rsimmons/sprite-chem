@@ -10,6 +10,7 @@ import { CodeEditorState, DropLoc, reducer } from './reducer';
 import { outerEnv, analyzedPaletteNodes } from './template';
 import { analyzeProgram } from './analysis';
 import { DragTracker } from '../../../extshared/dragTracker';
+import { ErrorBoundary } from "react-error-boundary";
 
 const CodeEditor: React.FC<{editorCtx: EditorContext<Code, undefined>}> = ({editorCtx}) => {
   const [state, dispatch] = useReducer(reducer, null, (): CodeEditorState => {
@@ -298,7 +299,9 @@ const codeEditor: Editor<Code, undefined> = {
         const root = ReactDOM.createRoot(context.container);
         root.render(
           <React.StrictMode>
-            <CodeEditor editorCtx={context} />
+            <ErrorBoundary fallback={<div className="CodeEditor-crash">code editor crashed</div>}>
+              <CodeEditor editorCtx={context} />
+            </ErrorBoundary>
           </React.StrictMode>
         );
         unmount = () => {
