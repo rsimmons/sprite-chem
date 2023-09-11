@@ -40,6 +40,8 @@ const App: React.FC = () => {
       type: 'beginDragValue',
       ...args,
     });
+
+    dispatchDragMove(args.pointerId, args.pos);
   };
 
   const handleBeginDragEV = (args: BeginDragEVArgs) => {
@@ -47,6 +49,8 @@ const App: React.FC = () => {
       type: 'beginDragEV',
       ...args,
     });
+
+    dispatchDragMove(args.pointerId, args.pos);
   };
 
   const pointerEventTarget = useRef(new EventTarget());
@@ -61,6 +65,19 @@ const App: React.FC = () => {
       cancelable: true,
     });
     return pointerEventTarget.current.dispatchEvent(pe);
+  };
+
+  const dispatchDragMove = (pointerId: PointerID, pos: Vec2): void => {
+    const dragInfo = createDragInfo(pointerId);
+    if (dragInfo) {
+      const accepted = !dispatchDragEvent('dragMove', pointerId, pos, dragInfo);
+      if (accepted) {
+        dispatch({
+          type: 'acceptDrag',
+          pointerId: pointerId,
+        });
+      }
+    }
   };
 
   const handlePointerMove = (e: PointerEvent) => {
@@ -79,18 +96,7 @@ const App: React.FC = () => {
       pos,
     });
 
-    // TODO: This dragInfo is actually created off of the old state,
-    // i.e. the dispatch above hasn't been applied yet.
-    const dragInfo = createDragInfo(e.pointerId);
-    if (dragInfo) {
-      const accepted = !dispatchDragEvent('dragMove', e.pointerId, pos, dragInfo);
-      if (accepted) {
-        dispatch({
-          type: 'acceptDrag',
-          pointerId: e.pointerId,
-        });
-      }
-    }
+    dispatchDragMove(e.pointerId, pos);
   };
 
   const handlePointerUp = (e: PointerEvent) => {
@@ -103,23 +109,22 @@ const App: React.FC = () => {
       y: e.clientY,
     };
 
+    const dragInfo = createDragInfo(e.pointerId);
+    if (dragInfo) {
+      dispatchDragEvent('dragDrop', e.pointerId, pos, dragInfo);
+    }
+
     dispatch({
       type: 'pointerUp',
       pointerId: e.pointerId,
       pos,
     });
-
-    // TODO: This dragInfo is actually created off of the old state,
-    // i.e. the dispatch above hasn't been applied yet.
-    const dragInfo = createDragInfo(e.pointerId);
-    if (dragInfo) {
-      dispatchDragEvent('dragDrop', e.pointerId, pos, dragInfo);
-    }
   };
 
   const createDragInfo = (pointerId: PointerID): DragInfo | undefined => {
-    invariant(state !== 'loading');
-    const matchDragStates = state.dragStates.filter(s => (s.pointerId === pointerId));
+    const curState = stateRef.current;
+    invariant(curState !== 'loading');
+    const matchDragStates = curState.dragStates.filter(s => (s.pointerId === pointerId));
     if (matchDragStates.length === 1) {
       const ds = matchDragStates[0];
 
@@ -243,12 +248,7 @@ const App: React.FC = () => {
                 <EditorContainer
                   ev={stoppedEditorEV}
                   pointerEventTarget={pointerEventTarget.current}
-                  onBeginDragValue={(args) => {
-                    dispatch({
-                      type: 'beginDragValue',
-                      ...args,
-                    });
-                  }}
+                  onBeginDragValue={handleBeginDragValue}
                 />
               )}
             </div>
