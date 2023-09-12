@@ -85,9 +85,10 @@ export interface Analysis {
 
   readonly errors: ReadonlyMap<NodeId, ReadonlyArray<AnalysisError>>;
 
-  // usually Hole nodes will be incomplete, but if we allow optional parameters
-  // then they might not be
-  readonly incomplete: ReadonlySet<NodeId>;
+  // inactive nodes are those that will not execute because they depend on
+  // nodes that are holes or that are themselves inactive. e.g. a function
+  // application is inactive if any of its arguments are inactive.
+  readonly inactive: ReadonlySet<NodeId>;
 }
 
 interface MutableAnalysis {
@@ -96,7 +97,7 @@ interface MutableAnalysis {
   readonly nodeType: Map<NodeId, Type>;
   readonly expectedType: Map<NodeId, Type>;
   readonly errors: Map<NodeId, Array<AnalysisError>>;
-  readonly incomplete: Set<NodeId>;
+  readonly inactive: Set<NodeId>;
 }
 
 function initMutableAnalysis(outerEnv: OuterStaticEnv): MutableAnalysis {
@@ -106,7 +107,7 @@ function initMutableAnalysis(outerEnv: OuterStaticEnv): MutableAnalysis {
     nodeType: new Map(outerEnv.varType),
     expectedType: new Map(),
     errors: new Map(),
-    incomplete: new Set(),
+    inactive: new Set(),
   };
 }
 
@@ -172,13 +173,20 @@ function analyzeValueExpr(expr: ValueExprNode, expectedType: Type, analysis: Mut
           exprType = {type: 'Unknown'};
         } else {
           const fnIface = fnType.iface;
+          let anyArgsUnknown = false;
           for (const [pid, argExpr] of expr.args) {
             const param = fnIface.params.find(p => p.pid === pid);
             invariant(param !== undefined);
             analyzeValueExpr(argExpr, param.type, analysis);
+
+            const argType = analysis.nodeType.get(argExpr.nid);
+            invariant(argType !== undefined);
+            if (argType.type === 'Unknown') {
+              anyArgsUnknown = true;
+            }
           }
 
-          exprType = fnType.iface.retType;
+          exprType = anyArgsUnknown ? {type: 'Unknown'} : fnIface.retType;
         }
       }
       break;
@@ -188,7 +196,7 @@ function analyzeValueExpr(expr: ValueExprNode, expectedType: Type, analysis: Mut
   analysis.nodeType.set(expr.nid, exprType);
   analysis.expectedType.set(expr.nid, expectedType);
   if (exprType.type === 'Unknown') {
-    analysis.incomplete.add(expr.nid);
+    analysis.inactive.add(expr.nid);
   } else if (!isSubtype(exprType, expectedType)) {
     addError(analysis, expr.nid, 'type mismatch');
   }
@@ -328,17 +336,32 @@ function analyzeDeclList(decls: ReadonlyArray<DeclNode>, outerEnv: OuterStaticEn
 
           case 'Hole': {
             expectedType = {type: 'Any'};
+            analysis.inactive.add(decl.lhs.nid);
             break;
           }
         }
 
         analyzeValueExpr(decl.rhs, expectedType, analysis);
 
+        // determine if this is inactive
+        const rhsType = analysis.nodeType.get(decl.rhs.nid);
+        invariant(rhsType !== undefined);
+        if ((rhsType.type === 'Unknown') || analysis.inactive.has(decl.lhs.nid)) {
+          analysis.inactive.add(decl.nid);
+        }
+
         break;
       }
 
       case 'When': {
         analyzeValueExpr(decl.evts, {type: 'UnitEvent'}, analysis);
+
+        // determine if this is inactive
+        const evtsType = analysis.nodeType.get(decl.evts.nid);
+        invariant(evtsType !== undefined);
+        if (evtsType.type === 'Unknown') {
+          analysis.inactive.add(decl.nid);
+        }
         break;
       }
 

@@ -94,7 +94,7 @@ const Block: React.FC<{children?: React.ReactNode, node: ASTNode, ctx: NodeViewC
 
   return (
     <div
-      className={`CodeEditor-block CodeEditor-block-style-${blockStyle} CodeEditor-highlight-${dropHL}`}
+      className={`CodeEditor-block CodeEditor-block-style-${blockStyle} CodeEditor-highlight-${dropHL} ${ctx.analysis.inactive.has(node.nid) ? 'CodeEditor-block-inactive' : ''}`}
       ref={blockElem}
       onPointerDown={handlePointerDown}
       data-node-id={node.nid}

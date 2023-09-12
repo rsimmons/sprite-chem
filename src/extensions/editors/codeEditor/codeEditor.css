@@ -36,6 +36,10 @@
   cursor: grab;
 }
 
+.CodeEditor-block-inactive {
+  background: #eee;
+}
+
 .CodeEditor-block.CodeEditor-highlight-valid {
   outline: 2px solid black;
 }
