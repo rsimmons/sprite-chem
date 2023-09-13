@@ -1,5 +1,15 @@
 import { genUidRandom, insertIntoArray, invariant } from '../../../util';
-import { ASTNode, NodeId, ProgramNode, isBindExprNode, isDeclNode, isMutTargetNode, isProgramNode, isStmtNode, isValueExprNode, isWhenNode } from '../../types/code';
+import { ASTNode, HoleNode, NodeId, ProgramNode, isBindExprNode, isDeclNode, isMutTargetNode, isProgramNode, isStmtNode, isValueExprNode, isWhenNode } from '../../types/code';
+
+export type DropLoc =
+  {
+    readonly type: 'ontoNode';
+    readonly nodeId: NodeId;
+  } | {
+    readonly type: 'intoList';
+    readonly nodeId: NodeId; // node which has a child list. we assume nodes can only have one child list
+    readonly idx: number; // may equal list length to go after last
+  };
 
 export function transformChildren<N extends ASTNode, X>(node: N, transform: (node: ASTNode, ctx: X) => ASTNode, ctx: X): N {
   // this could be factored out like transformNodeArr above
@@ -192,34 +202,53 @@ export function progInsertListNode(program: ProgramNode, parentNodeId: NodeId, i
   return newProgram;
 }
 
-export function progRemoveNode(program: ProgramNode, removeNode: ASTNode): ProgramNode {
-  let removeCount = 0;
+export function progRemoveNode(program: ProgramNode, removeNode: ASTNode): [ProgramNode, DropLoc] {
+  let removedDropLoc: DropLoc | undefined = undefined;
 
   const transform = (node: ASTNode): ASTNode => {
     if (node === removeNode) {
-      removeCount++;
-      return {
+      invariant(removedDropLoc === undefined, 'expected only one node to be removed');
+      const newNode: HoleNode = {
         type: 'Hole',
         nid: genUidRandom(),
       };
+      removedDropLoc = {
+        type: 'ontoNode',
+        nodeId: newNode.nid,
+      };
+      return newNode;
     } else {
       let newNode = node;
       if (isProgramNode(node)) {
-        const newDecls = node.decls.filter(decl => (decl !== removeNode));
-        if (newDecls.length !== node.decls.length) {
-          removeCount += (node.decls.length - newDecls.length);
+        const idx = node.decls.findIndex(decl => (decl === removeNode));
+        if (idx !== -1) {
+          const newDecls = [...node.decls];
+          newDecls.splice(idx, 1);
           newNode = {
             ...node,
             decls: newDecls,
           };
+          invariant(removedDropLoc === undefined, 'expected only one node to be removed');
+          removedDropLoc = {
+            type: 'intoList',
+            nodeId: node.nid,
+            idx,
+          };
         }
       } else if (isWhenNode(node)) {
-        const newStmts = node.stmts.filter(stmt => (stmt !== removeNode));
-        if (newStmts.length !== node.stmts.length) {
-          removeCount += (node.stmts.length - newStmts.length);
+        const idx = node.stmts.findIndex(stmt => (stmt === removeNode));
+        if (idx !== -1) {
+          const newStmts = [...node.stmts];
+          newStmts.splice(idx, 1);
           newNode = {
             ...node,
             stmts: newStmts,
+          };
+          invariant(removedDropLoc === undefined, 'expected only one node to be removed');
+          removedDropLoc = {
+            type: 'intoList',
+            nodeId: node.nid,
+            idx,
           };
         }
       }
@@ -230,9 +259,9 @@ export function progRemoveNode(program: ProgramNode, removeNode: ASTNode): Progr
   const newProgram = transform(program);
   invariant(isProgramNode(newProgram));
 
-  invariant(removeCount === 1, 'expected exactly one node removed');
+  invariant(removedDropLoc !== undefined, 'found no node to remove');
 
-  return newProgram;
+  return [newProgram, removedDropLoc];
 }
 
 export function treeRandomizeNodeIds(root: ASTNode, nodePred: (node: ASTNode) => boolean): ASTNode {

@@ -20,7 +20,7 @@ const PoolTabPanel: React.FC<{
   readonly state: AppState;
   readonly pointerEventTarget: EventTarget;
   readonly onBeginDragEV: (args: BeginDragEVArgs) => void;
-  readonly onBeginDragValue: (args: BeginDragValueArgs) => void;
+  readonly onBeginDragValue: (args: BeginDragValueArgs) => string;
 }> = ({globalId, state, pointerEventTarget, onBeginDragEV, onBeginDragValue}) => {
   const dragTracker = useRef<DragTracker<DragObj>>(new DragTracker());
 

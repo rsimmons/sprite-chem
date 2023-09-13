@@ -43,6 +43,8 @@ export interface BeginDragValueArgs {
   readonly offset: {x: number, y: number};
   readonly dims: {x: number, y: number};
   readonly previewElem: HTMLElement;
+  // if drag is dropped immediately with no move, will it be accepted?
+  readonly reaccept: boolean;
 }
 
 export interface EditorContext<T, C> {
@@ -72,7 +74,7 @@ export interface EditorContext<T, C> {
   /**
    * Begin a drag of a value/object that is NOT an EV.
    */
-  readonly beginDragValue: (args: BeginDragValueArgs) => void;
+  readonly beginDragValue: (args: BeginDragValueArgs) => string;
 
   // events fired are 'pointerMove' and 'pointerUp',
   // and details are of type PointerEventData

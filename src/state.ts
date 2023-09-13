@@ -66,6 +66,7 @@ export type AppAction =
     readonly offset: Vec2;
     readonly dims: Vec2;
     readonly previewElem: HTMLElement;
+    readonly reaccept: boolean;
   } | {
     readonly type: 'pointerMove';
     readonly pointerId: PointerID;
@@ -141,7 +142,7 @@ export function reducer(state: AppStateOrLoading, action: AppAction): AppStateOr
             value: action.value,
             previewElem: action.previewElem,
           },
-          accepted: false,
+          accepted: action.reaccept,
         }]),
       };
     }

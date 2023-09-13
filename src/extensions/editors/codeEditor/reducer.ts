@@ -1,7 +1,7 @@
 import { invariant } from "../../../util";
 import { ASTNode, NodeId, ProgramNode } from "../../types/code";
 import { Analysis, OuterStaticEnv, analyzeProgram } from "./analysis";
-import { progInsertListNode, progRemoveNode, progReplaceNode, progReplaceNodeId } from "./tree";
+import { DropLoc, progInsertListNode, progRemoveNode, progReplaceNode, progReplaceNodeId } from "./tree";
 
 export type CodeEditorAction =
   {
@@ -11,6 +11,7 @@ export type CodeEditorAction =
   } | {
     readonly type: 'removeNodeForDrag';
     readonly node: ASTNode;
+    readonly dragId: string; // so that we can set a potential drop if it is dropped before being moved
   } | {
     readonly type: 'setPotentialDrop';
     readonly dragId: string;
@@ -25,16 +26,6 @@ export type CodeEditorAction =
   };
 
 export type CodeEditorDispatch = React.Dispatch<CodeEditorAction>;
-
-export type DropLoc =
-  {
-    readonly type: 'ontoNode';
-    readonly nodeId: NodeId;
-  } | {
-    readonly type: 'intoList';
-    readonly nodeId: NodeId; // node which has a child list. we assume nodes can only have one child list
-    readonly idx: number; // may equal list length to go after last
-  };
 
 interface PotentialDrop {
   readonly potentialNode: ASTNode;
@@ -68,6 +59,11 @@ function applyPotentialDrop(node: ASTNode, dropLoc: DropLoc, program: ProgramNod
   }
 }
 
+function testPotentialDrop(node: ASTNode, dropLoc: DropLoc, program: ProgramNode, outerEnv: OuterStaticEnv): boolean {
+  const testProgram = applyPotentialDrop(node, dropLoc, program);
+  return (analyzeProgram(testProgram, outerEnv).errors.size === 0);
+}
+
 export function reducer(state: CodeEditorState, action: CodeEditorAction): CodeEditorState {
   switch (action.type) {
     case 'replaceNode': {
@@ -80,15 +76,26 @@ export function reducer(state: CodeEditorState, action: CodeEditorAction): CodeE
     }
 
     case 'removeNodeForDrag': {
+      const [newProgram, removedDropLoc] = progRemoveNode(state.program, action.node);
+
+      const valid = testPotentialDrop(action.node, removedDropLoc, newProgram, state.outerEnv);
+
+      const newPotentialDrops = new Map(state.potentialDrops);
+      newPotentialDrops.set(action.dragId, {
+        potentialNode: action.node,
+        dropLoc: removedDropLoc,
+        valid,
+      });
+
       return updateAnalysis({
         ...state,
-        program: progRemoveNode(state.program, action.node),
+        program: newProgram,
+        potentialDrops: newPotentialDrops,
       });
     }
 
     case 'setPotentialDrop': {
-      const testProgram = applyPotentialDrop(action.potentialNode, action.dropLoc, state.program);
-      const valid = (analyzeProgram(testProgram, state.outerEnv).errors.size === 0);
+      const valid = testPotentialDrop(action.potentialNode, action.dropLoc, state.program, state.outerEnv);
 
       const newPotentialDrops = new Map(state.potentialDrops);
       newPotentialDrops.set(action.dragId, {

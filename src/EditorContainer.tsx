@@ -9,7 +9,7 @@ import { EVWrapper } from './extlib/ev';
 const EditorContainer: React.FC<{
   readonly ev: EVWrapper<any>;
   readonly pointerEventTarget: EventTarget;
-  readonly onBeginDragValue: (args: BeginDragValueArgs) => void;
+  readonly onBeginDragValue: (args: BeginDragValueArgs) => string;
 }> = ({ev, onBeginDragValue, pointerEventTarget}) => {
   useConstant(ev);
   // TODO: useConstant(onBeginDragValue), etc?
@@ -36,9 +36,7 @@ const EditorContainer: React.FC<{
       valueChanged: (newValue) => {
         ev.setValue(newValue);
       },
-      beginDragValue: (args) => {
-        onBeginDragValue(args);
-      },
+      beginDragValue: onBeginDragValue,
       pointerEventTarget,
       getPreviewer: (typeId) => {
         return TEMPLATE.previewers[typeId];

@@ -35,13 +35,19 @@ const App: React.FC = () => {
     })();
   });
 
-  const handleBeginDragValue = (args: BeginDragValueArgs) => {
+  const handleBeginDragValue = (args: BeginDragValueArgs): string => {
     dispatch({
       type: 'beginDragValue',
       ...args,
     });
 
-    dispatchDragMove(args.pointerId, args.pos);
+    // this is ugly, we want to find the dragId that was just created
+    const curState = stateRef.current;
+    invariant(curState !== 'loading');
+    const matchDragStates = curState.dragStates.filter(s => (s.pointerId === args.pointerId));
+    invariant(matchDragStates.length === 1);
+    const ds = matchDragStates[0];
+    return ds.dragId;
   };
 
   const handleBeginDragEV = (args: BeginDragEVArgs) => {
@@ -49,8 +55,6 @@ const App: React.FC = () => {
       type: 'beginDragEV',
       ...args,
     });
-
-    dispatchDragMove(args.pointerId, args.pos);
   };
 
   const pointerEventTarget = useRef(new EventTarget());

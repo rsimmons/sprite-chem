@@ -1,13 +1,13 @@
 import React, { useEffect, useRef } from 'react';
 import { Vec2 } from "../../../vec";
 import { ASTNode, Code, DeclNode, EmitNode, EqNode, FnAppNode, HoleNode, LiteralNode, NodeId, ProgramNode, StmtNode, VarRefNode, WhenNode } from "../../types/code";
-import { treeRandomizeNodeIds } from "./tree";
+import { DropLoc, treeRandomizeNodeIds } from "./tree";
 import { useConstant } from '../../../utilReact';
 import { Previewer, PreviewerReturn } from '../../../extlib/previewer';
 import { invariant } from '../../../util';
 import { EVWrapper } from '../../../extlib/ev';
 import { parseFnTmplText } from './fnTmpl';
-import { CodeEditorDispatch, DropLoc } from './reducer';
+import { CodeEditorDispatch } from './reducer';
 import { EditorContext } from '../../../extlib/editor';
 import { Analysis } from './analysis';
 
@@ -61,14 +61,7 @@ const Block: React.FC<{children?: React.ReactNode, node: ASTNode, ctx: NodeViewC
 
     const dragNode: ASTNode = (ctx.kind === 'palette') ? treeRandomizeNodeIds(node, () => true) : node;
 
-    if (ctx.kind === 'code') {
-      ctx.dispatch({
-        type: 'removeNodeForDrag',
-        node: dragNode,
-      });
-    }
-
-    ctx.editorCtx.beginDragValue({
+    const dragId = ctx.editorCtx.beginDragValue({
       pointerId: e.pointerId,
       typeId: 'codeEditor/node',
       value: dragNode,
@@ -79,7 +72,16 @@ const Block: React.FC<{children?: React.ReactNode, node: ASTNode, ctx: NodeViewC
       offset,
       dims: {x: rect.width, y: rect.height},
       previewElem: blockElem.current.cloneNode(true) as HTMLElement,
+      reaccept: true,
     });
+
+    if (ctx.kind === 'code') {
+      ctx.dispatch({
+        type: 'removeNodeForDrag',
+        node: dragNode,
+        dragId,
+      });
+    }
   };
 
   let dropHL: 'none' | 'valid' | 'invalid' = 'none';

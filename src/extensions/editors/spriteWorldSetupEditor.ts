@@ -137,6 +137,7 @@ const spriteWorldSetupEditor: Editor<SpriteWorldSetup, undefined> = {
           offset,
           dims: {x: spriteCSSSize, y: spriteCSSSize},
           previewElem: previewCanvas,
+          reaccept: true,
         });
       }
     };
