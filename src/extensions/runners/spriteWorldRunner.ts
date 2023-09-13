@@ -205,7 +205,7 @@ const spriteWorldRunner: Runner = {
         },
         // copy pos, size and init program context
         instances: insts.map(inst => {
-          const progContext = startProgram(sprite.code);
+          const progContext = startProgram(sprite.code.program, sprite.code.inactiveNodes);
 
           const instanceInfo: InstanceInfo = {
             pos: {

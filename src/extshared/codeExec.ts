@@ -1,4 +1,5 @@
 import { DeclNode, NodeId, ProgramNode, StmtNode, ValueExprNode } from "../extensions/types/code";
+import { invariant } from "../util";
 
 export type EventStream<T> = ReadonlyArray<T> | undefined;
 
@@ -20,6 +21,7 @@ export let currentStateFrame: StateFrame | undefined = undefined;
 
 export interface ProgramContext {
   prog: ProgramNode;
+  inactiveNodes: ReadonlySet<NodeId>;
   readonly rootFrame: StateFrame;
 }
 
@@ -45,6 +47,7 @@ function getNodeFnChildFrame(state: NodeFnActState, nid: NodeId): StateFrame {
 export interface InterpContext {
   readonly varCtx: VarContext;
   readonly state: NodeFnActState;
+  readonly inactiveNodes: ReadonlySet<NodeId>;
 }
 
 function evalValueExpr(expr: ValueExprNode, ctx: InterpContext): any {
@@ -80,32 +83,43 @@ function evalValueExpr(expr: ValueExprNode, ctx: InterpContext): any {
 function applyDecl(decl: DeclNode, ctx: InterpContext): void {
   switch (decl.type) {
     case 'Eq': {
-      let targetNid: NodeId;
-      switch (decl.lhs.type) {
-        case 'VarRef':
-          targetNid = decl.lhs.refId;
-          break;
+      if (!ctx.inactiveNodes.has(decl.rhs.nid)) {
+        const rhsVal = evalValueExpr(decl.rhs, ctx);
 
-        case 'VarName':
-          targetNid = decl.lhs.nid;
-          break;
+        if (!ctx.inactiveNodes.has(decl.nid)) {
+          invariant(!ctx.inactiveNodes.has(decl.lhs.nid));
 
-        default:
-          throw new Error('unimplemented');
+          let targetNid: NodeId;
+          switch (decl.lhs.type) {
+            case 'VarRef':
+              targetNid = decl.lhs.refId;
+              break;
+
+            case 'VarName':
+              targetNid = decl.lhs.nid;
+              break;
+
+            default:
+              throw new Error('should not reach this');
+          }
+
+          ctx.varCtx.nidVal.set(targetNid, rhsVal);
+        }
       }
-      const rhsVal = evalValueExpr(decl.rhs, ctx);
-      ctx.varCtx.nidVal.set(targetNid, rhsVal);
       break;
     }
 
     case 'When': {
-      const evtsVal = evalValueExpr(decl.evts, ctx);
-      if (evtsVal !== undefined) {
-        if (evtsVal.length === 0) {
-          throw new Error('unexpected');
-        }
-        for (const stmt of decl.stmts) {
-          applyStmt(stmt, ctx);
+      if (!ctx.inactiveNodes.has(decl.evts.nid)) {
+        const evtsVal = evalValueExpr(decl.evts, ctx);
+
+        if (evtsVal !== undefined) {
+          if (evtsVal.length === 0) {
+            throw new Error('unexpected');
+          }
+          for (const stmt of decl.stmts) {
+            applyStmt(stmt, ctx);
+          }
         }
       }
       break;
@@ -118,22 +132,31 @@ function applyDecl(decl: DeclNode, ctx: InterpContext): void {
 
 function applyStmt(stmt: StmtNode, ctx: InterpContext): void {
   switch (stmt.type) {
-    case 'EmitUnit':
-    case 'EmitValue': {
-      // TODO: if EmitValue, evaluate expression
+    case 'Eq': {
+      // ignore for now
+      break;
+    }
 
-      if (stmt.evts.type !== 'VarRef') {
-        throw new Error('unimplemented');
-      }
+    case 'EmitUnit': {
+      if (!ctx.inactiveNodes.has(stmt.evts.nid)) {
+        invariant(!ctx.inactiveNodes.has(stmt.nid));
 
-      const evtStream = ctx.varCtx.nidVal.get(stmt.evts.refId);
-      if (evtStream === undefined) {
-        ctx.varCtx.nidVal.set(stmt.evts.refId, [undefined]);
-      } else {
-        ctx.varCtx.nidVal.set(stmt.evts.refId, [...evtStream, undefined]);
+        if (stmt.evts.type !== 'VarRef') {
+          throw new Error('unimplemented');
+        }
+
+        const evtStream = ctx.varCtx.nidVal.get(stmt.evts.refId);
+        if (evtStream === undefined) {
+          ctx.varCtx.nidVal.set(stmt.evts.refId, [undefined]);
+        } else {
+          ctx.varCtx.nidVal.set(stmt.evts.refId, [...evtStream, undefined]);
+        }
       }
       break;
     }
+
+    case 'EmitValue':
+      throw new Error('unimplemented');
 
     default:
       throw new Error('unimplemented');
@@ -144,9 +167,10 @@ function applyStmt(stmt: StmtNode, ctx: InterpContext): void {
 // `nativeGlobalContext` is the global context that is accessible to native (JS) functions.
 // `nativeGlobalContext` can be mutated after starting, and there is no need to "nofity"
 // this code of that mutation.
-export function startProgram(prog: ProgramNode): ProgramContext {
+export function startProgram(prog: ProgramNode, inactiveNodes: ReadonlySet<NodeId>): ProgramContext {
   return {
     prog,
+    inactiveNodes,
     rootFrame: {
       state: undefined,
       cleanup: undefined,
@@ -165,6 +189,7 @@ export function stepProgram(progCtx: ProgramContext, varCtx: VarContext): void {
   const interpCtx: InterpContext = {
     varCtx,
     state: st,
+    inactiveNodes: progCtx.inactiveNodes,
   };
 
   for (const decl of progCtx.prog.decls) {
@@ -172,6 +197,7 @@ export function stepProgram(progCtx: ProgramContext, varCtx: VarContext): void {
   }
 }
 
+// TODO: include new inactiveNodes?
 export function modifyProgram(ctx: ProgramContext, newProg: ProgramNode): void {
   ctx.prog = newProg;
 

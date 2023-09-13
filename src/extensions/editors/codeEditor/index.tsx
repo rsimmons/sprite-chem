@@ -15,21 +15,22 @@ import { DropLoc } from './tree';
 
 const CodeEditor: React.FC<{editorCtx: EditorContext<Code, undefined>}> = ({editorCtx}) => {
   const [state, dispatch] = useReducer(reducer, null, (): CodeEditorState => {
-    const program = editorCtx.initialValue;
+    const codeValue = editorCtx.initialValue;
 
     return {
-      program,
+      program: codeValue.program,
       potentialDrops: new Map(),
       outerEnv,
-      analysis: analyzeProgram(program, outerEnv),
+      analysis: analyzeProgram(codeValue.program, outerEnv),
     };
   });
 
   const codeValRef = useRef<Code>(editorCtx.initialValue);
   useEffect(() => {
-    if (state.program !== codeValRef.current) {
-      codeValRef.current = state.program;
-      editorCtx.valueChanged(state.program);
+    if ((state.program !== codeValRef.current.program) || (state.analysis.inactive !== codeValRef.current.inactiveNodes)) {
+      codeValRef.current.program = state.program;
+      codeValRef.current.inactiveNodes = state.analysis.inactive;
+      editorCtx.valueChanged(codeValRef.current);
     }
   });
 

@@ -15,7 +15,7 @@ import { EVWrapper, createDevtimeEVWrapper } from './extlib/ev';
 import witch from './sprites/witch.png';
 import monster from './sprites/monster.png';
 import cyclops from './sprites/cyclops.png';
-import { ProgramNode } from './extensions/types/code';
+import { Code, ProgramNode } from './extensions/types/code';
 
 export const TEMPLATE: Template = {
   pools: [
@@ -82,9 +82,13 @@ export const TEMPLATE: Template = {
         nid: 'program',
         decls: [],
       };
+      const initCode: Code = {
+        program: initProg,
+        inactiveNodes: new Set(),
+      };
       const sprite = {
         imageBitmap,
-        code: initProg,
+        code: initCode,
       };
       const spriteEV = createDevtimeEVWrapper<Sprite>('sprite', sprite);
       spriteEVs.push(spriteEV);

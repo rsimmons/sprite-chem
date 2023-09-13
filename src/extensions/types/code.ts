@@ -129,4 +129,7 @@ export type ASTNode =
   | StmtNode
   | ProgramNode;
 
-export type Code = ProgramNode;
+export interface Code {
+  program: ProgramNode;
+  inactiveNodes: ReadonlySet<NodeId>;
+}

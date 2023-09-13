@@ -366,6 +366,35 @@ function analyzeDeclList(decls: ReadonlyArray<DeclNode>, outerEnv: OuterStaticEn
         if (evtsType.type === 'Unknown') {
           analysis.inactive.add(decl.nid);
         }
+
+        for (const stmt of decl.stmts) {
+          switch (stmt.type) {
+            case 'EmitUnit': {
+              switch (stmt.evts.type) {
+                case 'VarRef':
+                  break;
+
+                case 'Hole': {
+                  analysis.inactive.add(stmt.evts.nid);
+                  analysis.inactive.add(stmt.nid);
+                  break;
+                }
+
+                default:
+                  throw new Error('unimplemented');
+              }
+              break;
+            }
+
+            case 'Eq': {
+              analysis.inactive.add(stmt.nid); // don't handle for now
+              break;
+            }
+
+            default:
+              throw new Error('unimplemented');
+          }
+        }
         break;
       }
 
