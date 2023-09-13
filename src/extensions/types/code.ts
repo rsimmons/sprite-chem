@@ -60,11 +60,18 @@ export interface EqNode {
   readonly rhs: ValueExprNode;
 }
 
-export interface EmitNode {
-  readonly type: 'Emit';
+// emit a "unit type" value, which is just a signal that something happened
+export interface EmitUnitNode {
+  readonly type: 'EmitUnit';
   readonly nid: NodeId;
   readonly evts: MutTargetNode; // event var we are emitting to
-  readonly expr: ValueExprNode; // the value we are emitting
+}
+
+export interface EmitValueNode {
+  readonly type: 'EmitValue';
+  readonly nid: NodeId;
+  readonly evts: MutTargetNode; // event var we are emitting to
+  readonly expr: ValueExprNode;
 }
 
 export interface ProgramNode {
@@ -109,9 +116,10 @@ export function isMutTargetNode(node: ASTNode): node is MutTargetNode {
 
 export type StmtNode =
   | EqNode
-  | EmitNode;
+  | EmitUnitNode
+  | EmitValueNode;
 export function isStmtNode(node: ASTNode): node is StmtNode {
-  return (node.type === 'Eq') || (node.type === 'Emit');
+  return (node.type === 'Eq') || (node.type === 'EmitUnit') || (node.type === 'EmitValue');
 }
 
 export type ASTNode =

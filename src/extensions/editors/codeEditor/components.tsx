@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { Vec2 } from "../../../vec";
-import { ASTNode, Code, DeclNode, EmitNode, EqNode, FnAppNode, HoleNode, LiteralNode, NodeId, ProgramNode, StmtNode, VarRefNode, WhenNode } from "../../types/code";
+import { ASTNode, Code, DeclNode, EmitUnitNode, EmitValueNode, EqNode, FnAppNode, HoleNode, LiteralNode, NodeId, ProgramNode, StmtNode, VarRefNode, WhenNode } from "../../types/code";
 import { DropLoc, treeRandomizeNodeIds } from "./tree";
 import { useConstant } from '../../../utilReact';
 import { Previewer, PreviewerReturn } from '../../../extlib/previewer';
@@ -336,7 +336,20 @@ const WhenView: React.FC<{node: WhenNode, ctx: NodeViewCtx, isListItem: boolean,
   );
 };
 
-const EmitView: React.FC<{node: EmitNode, ctx: NodeViewCtx, isListItem: boolean, allowed: string}> = ({node, ctx, isListItem, allowed}) => {
+const EmitUnitView: React.FC<{node: EmitUnitNode, ctx: NodeViewCtx, isListItem: boolean, allowed: string}> = ({node, ctx, isListItem, allowed}) => {
+  const childCtx = {...ctx, allowDrag: (ctx.allowDrag === 'no-children') ? 'no' : ctx.allowDrag};
+
+  return (
+    <Block node={node} ctx={ctx} blockStyle="stmt" isListItem={isListItem} allowed={allowed}>
+      <BlockLine>
+        <BlockLineText text="trigger" />
+        <NodeView node={node.evts} ctx={childCtx} isListItem={false} allowed="bind" />
+      </BlockLine>
+    </Block>
+  );
+};
+
+const EmitValueView: React.FC<{node: EmitValueNode, ctx: NodeViewCtx, isListItem: boolean, allowed: string}> = ({node, ctx, isListItem, allowed}) => {
   const childCtx = {...ctx, allowDrag: (ctx.allowDrag === 'no-children') ? 'no' : ctx.allowDrag};
 
   return (
@@ -349,7 +362,7 @@ const EmitView: React.FC<{node: EmitNode, ctx: NodeViewCtx, isListItem: boolean,
       </BlockLine>
     </Block>
   );
-}
+};
 
 export const ProgramView: React.FC<{node: ProgramNode, ctx: NodeViewCtx}> = ({node, ctx}) => {
   return <DeclListView decls={node.decls} parentNode={node} ctx={ctx} />;
@@ -375,8 +388,11 @@ export const NodeView: React.FC<{node: ASTNode, ctx: NodeViewCtx, isListItem: bo
     case 'When':
       return <WhenView key={node.nid} node={node} ctx={ctx} isListItem={isListItem} allowed={allowed} />
 
-    case 'Emit':
-      return <EmitView key={node.nid} node={node} ctx={ctx} isListItem={isListItem} allowed={allowed} />
+    case 'EmitUnit':
+      return <EmitUnitView key={node.nid} node={node} ctx={ctx} isListItem={isListItem} allowed={allowed} />
+
+    case 'EmitValue':
+      return <EmitValueView key={node.nid} node={node} ctx={ctx} isListItem={isListItem} allowed={allowed} />
 
     default:
       throw new Error('unimplemented');

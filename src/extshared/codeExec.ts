@@ -118,8 +118,10 @@ function applyDecl(decl: DeclNode, ctx: InterpContext): void {
 
 function applyStmt(stmt: StmtNode, ctx: InterpContext): void {
   switch (stmt.type) {
-    case 'Emit': {
-      // TODO: evaluate expression. for now we just emit "unit" events
+    case 'EmitUnit':
+    case 'EmitValue': {
+      // TODO: if EmitValue, evaluate expression
+
       if (stmt.evts.type !== 'VarRef') {
         throw new Error('unimplemented');
       }

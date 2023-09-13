@@ -239,7 +239,8 @@ function analyzeDeclList(decls: ReadonlyArray<DeclNode>, outerEnv: OuterStaticEn
       case 'When': {
         for (const stmt of decl.stmts) {
           switch (stmt.type) {
-            case 'Emit': {
+            case 'EmitUnit':
+            case 'EmitValue': {
               switch (stmt.evts.type) {
                 case 'VarRef': {
                   const evtsId = stmt.evts.refId;
@@ -272,6 +273,9 @@ function analyzeDeclList(decls: ReadonlyArray<DeclNode>, outerEnv: OuterStaticEn
                 default:
                   throw new Error('unimplemented');
               }
+
+              invariant(stmt.type === 'EmitUnit'); // TODO: implement EmitValue
+
               break;
             }
 

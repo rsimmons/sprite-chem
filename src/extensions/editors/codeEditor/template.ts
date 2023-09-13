@@ -129,8 +129,13 @@ const paletteNodes: ReadonlyArray<ASTNode> = [
     refId: 'removeInst',
   },
   {
-    type: 'Emit',
-    nid: 'palette-emit',
+    type: 'EmitUnit',
+    nid: 'palette-emit-unit',
+    evts: {type: 'Hole', nid: 'emit_evts'},
+  },
+  {
+    type: 'EmitValue',
+    nid: 'palette-emit-value',
     evts: {type: 'Hole', nid: 'emit_evts'},
     expr: {type: 'Hole', nid: 'emit_expr'},
   },

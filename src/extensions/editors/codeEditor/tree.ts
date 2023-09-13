@@ -104,7 +104,20 @@ export function transformChildren<N extends ASTNode, X>(node: N, transform: (nod
       }
     }
 
-    case 'Emit': {
+    case 'EmitUnit': {
+      const newEvts = xChild(node.evts, isMutTargetNode);
+
+      if (newEvts === node.evts) {
+        return node;
+      } else {
+        return {
+          ...node,
+          evts: newEvts,
+        };
+      }
+    }
+
+    case 'EmitValue': {
       const newEvts = xChild(node.evts, isMutTargetNode);
       const newExpr = xChild(node.expr, isValueExprNode);
 
