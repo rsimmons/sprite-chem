@@ -89,7 +89,7 @@ function instTouched(): EventStream<undefined> {
   for (const touchEvt of touchEvts) {
     const diff = vec2sub(touchEvt.pos, inst.pos);
     const dist = vec2len(diff);
-    if (dist <= inst.size) {
+    if (dist <= (0.5*inst.size)) {
       touched = true;
       break;
     }
