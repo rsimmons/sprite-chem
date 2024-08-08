@@ -22,6 +22,7 @@ function makeFnApp(nid: NodeId, fnNid: NodeId, fnIface: FnExtIface): ASTNode {
 }
 
 const fnIfaces: ReadonlyArray<[NodeId, FnExtIface]> = [
+  /*
   ['gt', {
     tmpl: '{a|A} is greater than {b|B}',
     params: [
@@ -38,6 +39,7 @@ const fnIfaces: ReadonlyArray<[NodeId, FnExtIface]> = [
     ],
     retType: {type: 'Bool'},
   }],
+  */
   ['nearestInstPos', {
     tmpl: 'position of nearest {sprite|Sprite}',
     params: [
@@ -74,6 +76,7 @@ namedReturns.forEach(([nodeId, name, type]) => {
 });
 
 varName.set('origin', 'origin');
+varType.set('origin', {type: 'Vec2'});
 
 export const outerEnv: OuterStaticEnv = {
   varType,
@@ -110,7 +113,7 @@ const paletteNodes: ReadonlyArray<ASTNode> = [
     type: 'Eq',
     nid: 'palette-return-move-speed-num',
     lhs: {type: 'VarRef', nid: 'eq_lhs', refId: 'moveSpeed'},
-    rhs: {type: 'Literal', nid: 'eq_rhs', sub: {type: 'number', value: 10}},
+    rhs: {type: 'Literal', nid: 'eq_rhs', sub: {type: 'number', value: 1}},
   },
   {
     type: 'VarRef',

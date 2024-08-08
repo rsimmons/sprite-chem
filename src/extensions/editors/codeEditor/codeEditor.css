@@ -96,6 +96,7 @@
 
 .CodeEditor-block input {
   width: 3em;
+  text-align: right;
 }
 
 .CodeEditor-EVPreview {
@@ -111,4 +112,10 @@
   right: 0;
   top: 0;
   bottom: 0;
+}
+
+.CodeEditor-type-icons img {
+  width: 1.5em;
+  height: 1.5em;
+  vertical-align: middle;
 }

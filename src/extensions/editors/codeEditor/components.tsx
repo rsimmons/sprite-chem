@@ -9,16 +9,51 @@ import { EVWrapper } from '../../../extlib/ev';
 import { parseFnTmplText } from './fnTmpl';
 import { CodeEditorDispatch } from './reducer';
 import { EditorContext } from '../../../extlib/editor';
-import { Analysis } from './analysis';
+import { Analysis, OuterStaticEnv, Type } from './analysis';
+
+import svgReturn from './icons/return.svg';
+import svgVec2 from './icons/vec2.svg';
+import svgNum from './icons/number_digits.svg';
+import svgEvent from './icons/event.svg';
+import svgSprite from './icons/sprite.svg';
 
 type NodeViewCtxKind = 'palette' | 'code';
 interface NodeViewCtx {
   readonly kind: NodeViewCtxKind;
+  readonly outerEnv: OuterStaticEnv;
   readonly analysis: Analysis;
   readonly dispatch: CodeEditorDispatch;
   readonly allowDrag: 'yes' | 'no' | 'no-children';
   readonly editorCtx: EditorContext<Code, undefined>;
   readonly dropLocs: ReadonlyArray<[DropLoc, boolean]>; // boolean is "valid"
+}
+
+const TypeIcons: React.FC<{type: Type | undefined, isNamedReturn?: boolean}> = ({type, isNamedReturn}) => {
+  const iconMap = new Map([
+    ['Vec2', svgVec2],
+    ['Num', svgNum],
+    ['UnitEvent', svgEvent],
+  ]);
+
+  // TODO: this is a hack, EV icons should come from EV
+  const evMap = new Map([
+    ['sprite', svgSprite],
+  ]);
+
+  let iconUrl: string | undefined;
+  if (type) {
+    if (iconMap.has(type.type)) {
+      iconUrl = iconMap.get(type.type);
+    } else if (type.type === 'EV') {
+      iconUrl = evMap.get(type.typeId);
+    }
+  }
+
+  if (iconUrl) {
+    return <span className="CodeEditor-type-icons">{isNamedReturn && <img src={svgReturn} />}<img src={iconUrl} /></span>
+  } else {
+    return <span style={{color: 'grey'}}>({isNamedReturn && '<-'}{type ? type.type: 'undef'})</span>
+  }
 }
 
 const Block: React.FC<{children?: React.ReactNode, node: ASTNode, ctx: NodeViewCtx, blockStyle: string, isListItem: boolean, allowed: string}> = ({children, node, ctx, blockStyle, isListItem, allowed}) => {
@@ -94,9 +129,11 @@ const Block: React.FC<{children?: React.ReactNode, node: ASTNode, ctx: NodeViewC
     }
   }
 
+  const renderInactive = (ctx.kind === 'code') && ctx.analysis.inactive.has(node.nid);
+
   return (
     <div
-      className={`CodeEditor-block CodeEditor-block-style-${blockStyle} CodeEditor-highlight-${dropHL} ${ctx.analysis.inactive.has(node.nid) ? 'CodeEditor-block-inactive' : ''}`}
+      className={`CodeEditor-block CodeEditor-block-style-${blockStyle} CodeEditor-highlight-${dropHL} ${renderInactive ? 'CodeEditor-block-inactive' : ''}`}
       ref={blockElem}
       onPointerDown={handlePointerDown}
       data-node-id={node.nid}
@@ -152,6 +189,7 @@ const BlockVList: React.FC<{childViews: ReadonlyMap<string, React.ReactNode>, dr
 };
 
 const HoleView: React.FC<{node: HoleNode, ctx: NodeViewCtx, isListItem: boolean, allowed: string}> = ({node, ctx, isListItem, allowed}) => {
+  const expectedType = ctx.analysis.expectedType.get(node.nid);
   return (
     <Block
       node={node}
@@ -159,7 +197,7 @@ const HoleView: React.FC<{node: HoleNode, ctx: NodeViewCtx, isListItem: boolean,
       blockStyle="hole"
       isListItem={isListItem}
       allowed={allowed}
-    >&nbsp;</Block>
+    ><TypeIcons type={expectedType} /></Block>
   );
 };
 
@@ -234,9 +272,12 @@ const LiteralView: React.FC<{node: LiteralNode, ctx: NodeViewCtx, isListItem: bo
 
   const readOnly = (ctx.kind === 'palette');
 
+  const actualType = ctx.analysis.nodeType.get(node.nid);
+
   return (
     <Block node={node} ctx={ctx} blockStyle={(node.sub.type === 'ev') ? 'ev' : 'expr'} isListItem={isListItem} allowed={allowed}>
       <BlockLine>
+        <TypeIcons type={actualType} />
         {(() => {
           switch (node.sub.type) {
             case 'text':
@@ -268,10 +309,15 @@ const FnAppView: React.FC<{node: FnAppNode, ctx: NodeViewCtx, isListItem: boolea
 
   const childCtx = {...ctx, allowDrag: (ctx.allowDrag === 'no-children') ? 'no' : ctx.allowDrag};
 
+  const retType = ctx.analysis.nodeType.get(node.nid);
+
   return (
     <Block node={node} ctx={ctx} blockStyle="expr" isListItem={isListItem} allowed={allowed}>
       {parsed.lines.map((line, idx) => (
         <BlockLine key={idx}>
+          {idx === 0 &&
+            <TypeIcons type={retType} />
+          }
           {line.map((item, idx) => {
             switch (item.type) {
               case 'text': {
@@ -298,9 +344,13 @@ const FnAppView: React.FC<{node: FnAppNode, ctx: NodeViewCtx, isListItem: boolea
 const VarRefView: React.FC<{node: VarRefNode, ctx: NodeViewCtx, isListItem: boolean, allowed: string}> = ({node, ctx, isListItem, allowed}) => {
   const refName = ctx.analysis.varName.get(node.refId);
   invariant(refName !== undefined);
+
+  const refType = ctx.analysis.nodeType.get(node.refId);
+
   return (
     <Block node={node} ctx={ctx} blockStyle="expr" isListItem={isListItem} allowed={allowed}>
       <BlockLine>
+        <TypeIcons type={refType} isNamedReturn={ctx.outerEnv.namedReturns.has(node.refId)} />
         <BlockLineText text={refName} />
       </BlockLine>
     </Block>

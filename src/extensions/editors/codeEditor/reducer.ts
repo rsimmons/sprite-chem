@@ -61,7 +61,8 @@ function applyPotentialDrop(node: ASTNode, dropLoc: DropLoc, program: ProgramNod
 
 function testPotentialDrop(node: ASTNode, dropLoc: DropLoc, program: ProgramNode, outerEnv: OuterStaticEnv): boolean {
   const testProgram = applyPotentialDrop(node, dropLoc, program);
-  return (analyzeProgram(testProgram, outerEnv).errors.size === 0);
+  const analysis = analyzeProgram(testProgram, outerEnv);
+  return (analysis.errors.size === 0);
 }
 
 export function reducer(state: CodeEditorState, action: CodeEditorAction): CodeEditorState {

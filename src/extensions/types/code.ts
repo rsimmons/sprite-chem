@@ -74,6 +74,11 @@ export interface EmitValueNode {
   readonly expr: ValueExprNode;
 }
 
+export type EmitNode = EmitUnitNode | EmitValueNode;
+export function isEmitNode(node: ASTNode): node is EmitNode {
+  return (node.type === 'EmitUnit') || (node.type === 'EmitValue');
+}
+
 export interface ProgramNode {
   readonly type: 'Program';
   readonly nid: NodeId;

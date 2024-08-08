@@ -252,6 +252,7 @@ const CodeEditor: React.FC<{editorCtx: EditorContext<Code, undefined>}> = ({edit
             node={node}
             ctx={{
               kind: 'palette',
+              outerEnv: state.outerEnv,
               analysis,
               dispatch,
               allowDrag: 'no-children',
@@ -271,6 +272,7 @@ const CodeEditor: React.FC<{editorCtx: EditorContext<Code, undefined>}> = ({edit
           node={state.program}
           ctx={{
             kind: 'code',
+            outerEnv: state.outerEnv,
             analysis: state.analysis,
             dispatch,
             allowDrag: 'yes',

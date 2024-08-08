@@ -1,0 +1,8 @@
+Minimizing with https://jakearchibald.github.io/svgomg/ fixed React errors about namespaces etc.
+
+Credits
+number, number2: Russ
+event: explosion by omar vargas from <a href="https://thenounproject.com/browse/icons/term/explosion/" target="_blank" title="explosion Icons">Noun Project</a> (CC BY 3.0)
+return: Left by Adrien Coquet from <a href="https://thenounproject.com/browse/icons/term/left/" target="_blank" title="Left Icons">Noun Project</a> (CC BY 3.0)
+vec2: direction by Uswah Studio from <a href="https://thenounproject.com/browse/icons/term/direction/" target="_blank" title="direction Icons">Noun Project</a> (CC BY 3.0)
+sprite: alien infiltrator by Krishna Creative from <a href="https://thenounproject.com/browse/icons/term/alien-infiltrator/" target="_blank" title="alien infiltrator Icons">Noun Project</a> (CC BY 3.0)
